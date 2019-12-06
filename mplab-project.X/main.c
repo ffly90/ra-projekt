@@ -11,35 +11,10 @@
 typedef char u8;
 #define LEDS 24 // Number of LEDs
 
-char dark[]={0,0,0,0};
-char rainbow_color[LEDS][4]={
-    {0,0,0,255},
-    {0,0,255,0},
-    {0,255,0,0},
-    {255,0,0,0},
-    {0,0,0,255},
-    {0,0,255,0},
-    {0,255,0,0},
-    {255,0,0,0},
-    {0,0,0,255},
-    {0,0,255,0},
-    {0,255,0,0},
-    {255,0,0,0},
-    {0,0,0,255},
-    {0,0,255,0},
-    {0,255,0,0},
-    {255,0,0,0},
-    {0,0,0,255},
-    {0,0,255,0},
-    {0,255,0,0},
-    {255,0,0,0},
-    {0,0,0,255},
-    {0,0,255,0},
-    {0,255,0,0},
-    {255,0,0,0}
-};
-int uart_rainbow[LEDS][11];
-int uart_off[11];
+char dark[]={0,0,0,0};          // RGBW values for LED off
+char rainbow_color[LEDS][4];    // RGBW values for rainbow
+int uart_rainbow[LEDS][11];     // UART values for each LED
+int uart_off[11];               // UART values for LED off
 
 
 void char_to_bool(char in, bool* out){
@@ -67,10 +42,12 @@ void setup() {
     U1STAbits.UTXEN = 1; //UARTx transmitter is enabled, UxTX pin is controlled by UARTx (if ON = 1)
     U1STAbits.UTXINV = 1; // UxTX Idle state is ?1?
     
-    // PIN CONFIGURATION
-    TRISC = 0xEFFF; 
+    // OUTPUT PIN CONFIGURATION
+    TRISC = 0xEFFF;
+    // INPUT PIN CONFIGURATION
+    TRISBSET = 1<<9; // set input RB9 or button s1
 }
-
+    
 void create_rainbow(){
     int i;
     char g,r,b;
@@ -90,6 +67,10 @@ void create_rainbow(){
             r = 255 * i / LEDS;
             b = 255 - 255 * i / LEDS;
         }
+        rainbow_color[i][0] = g;
+        rainbow_color[i][1] = r;
+        rainbow_color[i][2] = b;
+        rainbow_color[i][3] = 0;
     }
 }
 
@@ -123,15 +104,15 @@ void rgbw_to_uart(u8 in[], int out[]){// in =  u8 g, u8 r, u8 b, u8 w
     }
 }
 
-void display(int pos){
+void display(int pos, int active){
     int i;
-    if(j==pos){
-        for (i = 0; i<11; i++){
+    if(active==pos){ // if current LED to UART is current active position
+        for (i = 0; i<11; i++){ // loop to send all UART values for a active LED
             while(U1STAbits.UTXBF == 1){}
-            U1TXREG = uart_rainbow[j][i];    // Write the data byte to the UART.
+            U1TXREG = uart_rainbow[active][i];    // Write the data byte to the UART.
         }   
     }else{
-        for (i = 0; i<11; i++){
+        for (i = 0; i<11; i++){ // loop to send all UART values for a dark LED
             while(U1STAbits.UTXBF == 1){}
             U1TXREG = uart_off[i];    // Write the data byte to the UART.
         }
@@ -139,19 +120,36 @@ void display(int pos){
 }
 
 void loop() {
-    int i, j, pos;
-    
+    int i, j, pos, dir=1;
+    bool in_old, in_new;
+    // create uart muster
     for(i=0; i<LEDS; i++){
         rgbw_to_uart(rainbow_color[i], uart_rainbow[i]);
     }
     rgbw_to_uart(dark ,uart_off);
+    // main loop
     while(1) {
-        for (pos = 0; pos<LEDS; pos++){
-            for (j=0;j<LEDS;j++){
-                display(pos);
-            }
-            delay_us(10000);
+        // call button
+        in_old = in_new;
+        in_new = (!(PORTB & 1<<9));
+        // change dir if positiv flag on button
+        if(!in_old && in_new){
+            dir = -1* dir;
         }
+        
+        // send LED color vlaues over uart
+        for (j=0;j<LEDS;j++){
+            display(pos, j);
+        }
+        delay_us(10000); // delay between the steps
+        
+        // step direction for running lights
+        pos += dir;
+        if(pos>=LEDS){
+            pos = 0;
+        }else if(pos<=0){
+            pos = LEDS;
+        } 
     }
 }
 
