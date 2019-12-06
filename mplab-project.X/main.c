@@ -10,10 +10,36 @@
 
 typedef char u8;
 #define LEDS 24 // Number of LEDs
-char pixels[LEDS][4]; // Color Values (r,g,b,w) for each LED
 
+char rainbow_color[24][4]={
+    {0,0,0,255},
+    {0,0,255,0},
+    {0,255,0,0},
+    {255,0,0,0},
+    {0,0,0,255},
+    {0,0,255,0},
+    {0,255,0,0},
+    {255,0,0,0},
+    {0,0,0,255},
+    {0,0,255,0},
+    {0,255,0,0},
+    {255,0,0,0},
+    {0,0,0,255},
+    {0,0,255,0},
+    {0,255,0,0},
+    {255,0,0,0},
+    {0,0,0,255},
+    {0,0,255,0},
+    {0,255,0,0},
+    {255,0,0,0},
+    {0,0,0,255},
+    {0,0,255,0},
+    {0,255,0,0},
+    {255,0,0,0}
+};
+int uart_rainbow[24][11];
+int uart_off[11];
 
-unsigned int uart_out[256];
 
 void char_to_bool(char in, bool* out){
     int i = 0;
@@ -58,7 +84,7 @@ void setup() {
     
 }
 
-void rgbw_to_uart(u8 in[], int out[]){//u8 r, u8 g, u8 b, u8 w
+void rgbw_to_uart(u8 in[], int out[]){//u8 g, u8 r, u8 b, u8 w
     bool bits[32] ;//= {r,g,b,w};
     int i,j;
     bool temp[8];
@@ -87,32 +113,33 @@ void rgbw_to_uart(u8 in[], int out[]){//u8 r, u8 g, u8 b, u8 w
 }
 
 void loop() {
-    int out[11];
-    u8 test[] = {0,0,0,3};
-    rgbw_to_uart(test, out);
+    int i, pos=0;
+    char dark[]={0,0,0,0};
+    for(i=0; i<24; i++){
+        rgbw_to_uart(rainbow_color[i], uart_rainbow[i]);
+    }
+    rgbw_to_uart(dark ,uart_off);
 	while(1) {
         int i;
         int j;
-        // r=0, g=0, b=0, w=3
-//        int out[]={~0b010001000,
-//                   ~0b010001000,
-//                   ~0b010001000,
-//                   ~0b010001000,
-//                   ~0b010001000,
-//                   ~0b010001000,
-//                   ~0b010001000,
-//                   ~0b010001000,
-//                   ~0b010001000,
-//                   ~0b010001000,
-//                   ~0b000011001,
-//                   };
         for (j=0;j<24;j++){
-            for (i = 0; i<11; i++){
-                while(U1STAbits.UTXBF == 1){}
-                U1TXREG = out[i];    // Write the data byte to the USART.
+            if(j==pos){
+                for (i = 0; i<11; i++){
+                    while(U1STAbits.UTXBF == 1){}
+                    U1TXREG = uart_rainbow[j][i];    // Write the data byte to the UART.
+                }   
+            }else{
+                for (i = 0; i<11; i++){
+                    while(U1STAbits.UTXBF == 1){}
+                    U1TXREG = uart_off[i];    // Write the data byte to the UART.
+                }
             }
         }
-        delay_us(80);
+        delay_us(10000);
+        pos++;
+        if(pos==24){
+            pos = 0;
+        }
     }
 }
 
