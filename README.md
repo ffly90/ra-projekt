@@ -56,3 +56,17 @@ UxSTA.UTXINV = 0 -> Ruhezustand = 0
 
 U1TXREG UART1 Regsiter mit 0-7 Bit
 TX8 für Bit 8
+
+
+
+# Timing
+
+
+24MHz / ( 4 * (1+1) )  = 3MHz -> 3MBits per Second
+
+pro Bit für LED brauchen wir 4 Bits in UART
+
+3MBits/s / 4 -> 750
+
+
+
