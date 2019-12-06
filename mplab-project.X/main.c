@@ -11,7 +11,7 @@
 typedef char u8;
 #define LEDS 24 // Number of LEDs
 
-char rainbow_color[24][4]={
+char rainbow_color[LEDS][4]={
     {0,0,0,255},
     {0,0,255,0},
     {0,255,0,0},
@@ -84,10 +84,34 @@ void setup() {
     
 }
 
-void rgbw_to_uart(u8 in[], int out[]){//u8 g, u8 r, u8 b, u8 w
-    bool bits[32] ;//= {r,g,b,w};
+void create_rainbow(){
+    int i;
+    char g,r,b;
+    for(i=0;i<LEDS;i++){
+        if(i<LEDS/3){
+            g = 255*i/LEDS;
+            r = 255 - 255*i/LEDS;
+            b = 0;
+        }
+        else if(i < LEDS*2/3){        
+            g = 255 - 255*i/LEDS;
+            r = 0;
+            b = 255 * i / LEDS;            
+        }
+        else{
+            g = 0;
+            r = 255 * i / LEDS;
+            b = 255 - 255 * i / LEDS;
+        }
+    }
+}
+
+
+void rgbw_to_uart(u8 in[], int out[]){// in =  u8 g, u8 r, u8 b, u8 w
+    bool bits[32] ;//= {r,g,b,w}; bits in order nessesarc for LED
     int i,j;
-    bool temp[8];
+    bool temp[8]; 
+    
     for(i=0;i<4;i++){
         char_to_bool(in[i],temp);
         for(j=0;j<8;j++){
