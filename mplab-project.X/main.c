@@ -6,11 +6,17 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <sys/attribs.h>
 #include <xc.h>
 
 typedef char u8;
 #define LEDS 24 // Number of LEDs
 
+
+bool output=false;               // output?
+int pos, dir = 1;               // position and direction of running lights
+int uart_pos = 0;
+unsigned int analog_in;         // Analog In value
 char dark[]={0,0,0,0};          // RGBW values for LED off
 char rainbow_color[LEDS][4];    // RGBW values for rainbow
 int uart_rainbow[LEDS][11];     // UART values for each LED
@@ -27,6 +33,29 @@ void char_to_bool(char in, bool* out){
 void setup() { 
 	SYSTEM_Initialize();   //set 24 MHz clock for CPU and Peripheral Bus
                            //clock period = 41,667 ns = 0,0417 us
+    
+    //Zähler Konfiguration
+    T1CONbits.TGATE = 0;
+    T1CONbits.TCS = 0;
+    T1CONbits.TCKPS = 0;
+    T1CONbits.TSYNC = 0;
+    PR1 = 3225;
+    T1CONbits.ON = 1;
+    
+    //ADC Konfiguration
+    ANSELCbits.ANSC8 = 1;
+    TRISCbits.TRISC8 = 1;
+    AD1CON1bits.SSRC = 0;
+    AD1CON1bits.MODE12 = 0;
+    AD1CHSbits.CH0SA = 14;
+    AD1CON3bits.ADRC = 0;
+    AD1CON3bits.ADCS = 0;
+    AD1CON1bits.ON = 1;
+    //Interrupt
+    IEC0bits.T1IE = 1;
+    IFS0bits.T1IF = 0;
+    IPC4bits.T1IP = 2;
+    //AD1CON1bits.SAMP = 1;
     
     // UART CONFIGURATION
     
@@ -47,7 +76,53 @@ void setup() {
     // INPUT PIN CONFIGURATION
     TRISBSET = 1<<9; // set input RB9 or button s1
 }
-    
+
+void readADC() {
+    AD1CON1bits.SAMP = 1;
+    delay_us(100);
+    while (!AD1CON1bits.DONE);
+    analog_in = ADC1BUF0;
+    AD1CON1bits.SAMP = 0;
+}
+
+void __ISR(_TIMER_1_VECTOR, IPL2SOFT) nextOutput(void) {
+    // step direction for running lights
+    pos += dir;
+    if(pos>=LEDS){
+        pos = 0;
+    }else if(pos<=0){
+        pos = LEDS;
+    } 
+    output = true; // if active uart values will be written to fifo buffer
+    IFS0bits.T1IF = 0;
+}
+
+
+void __ISR(_UART1_TX_VECTOR, IPL2SOFT) bufferWrite(void) {
+    // send LED color vlaues over uart
+    if(output)
+    {
+        while(U1STAbits.UTXBF == 0)
+        {
+            if(pos  == ( uart_pos / 11 )  )
+            { // if current LED to UART is current active position
+                U1TXREG = uart_rainbow[pos][uart_pos % 11 ];    // Write the data byte to the UART.
+            }else{
+                U1TXREG = uart_off[uart_pos % 11 ];    // Write the data byte to the UART.
+            }
+            
+            uart_pos++;
+            if(uart_pos >= 264){
+                uart_pos = 0;
+                output = false;
+                break;
+            }
+        }
+        
+    }
+    IFS0bits.U1TXIF = 0;
+}
+
 void create_rainbow(){
     int i;
     char g,r,b;
@@ -104,23 +179,8 @@ void rgbw_to_uart(u8 in[], int out[]){// in =  u8 g, u8 r, u8 b, u8 w
     }
 }
 
-void display(int pos, int active){
-    int i;
-    if(active==pos){ // if current LED to UART is current active position
-        for (i = 0; i<11; i++){ // loop to send all UART values for a active LED
-            while(U1STAbits.UTXBF == 1){}
-            U1TXREG = uart_rainbow[active][i];    // Write the data byte to the UART.
-        }   
-    }else{
-        for (i = 0; i<11; i++){ // loop to send all UART values for a dark LED
-            while(U1STAbits.UTXBF == 1){}
-            U1TXREG = uart_off[i];    // Write the data byte to the UART.
-        }
-    }
-}
-
 void loop() {
-    int i, j, pos, dir=1;
+    int i, j;
     bool in_old, in_new;
     // create uart muster
     for(i=0; i<LEDS; i++){
@@ -137,19 +197,8 @@ void loop() {
             dir = -1* dir;
         }
         
-        // send LED color vlaues over uart
-        for (j=0;j<LEDS;j++){
-            display(pos, j);
-        }
-        delay_us(10000); // delay between the steps
-        
-        // step direction for running lights
-        pos += dir;
-        if(pos>=LEDS){
-            pos = 0;
-        }else if(pos<=0){
-            pos = LEDS;
-        } 
+        // Read Value from Potentiometer
+        readADC();
     }
 }
 
