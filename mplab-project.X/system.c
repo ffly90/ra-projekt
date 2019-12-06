@@ -89,7 +89,6 @@ void SYSTEM_Initialize(void)
 
         INTCONbits.MVEC = 1;
         asm volatile("ei $0");
-        SYSTEM_Initialize_Extra();
     }
 }
 
