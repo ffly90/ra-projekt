@@ -41,24 +41,6 @@ int uart_rainbow[24][11];
 int uart_off[11];
 
 
-void char_to_bool(char in, bool* out){
-    int i = 0;
-    for ( i = 0; i<8;i++){
-        out[7-i] = in && 1<<i;
-    }
-}
-unsigned int to_uart_message(bool bit1, bool bit2, bool bit3){
-    unsigned int out = 0;
-    if(bit1){}
-    return out;
-}
-
-
-void pix_to_uart(void){
-    
-    
-}
-
 void setup() { 
 	SYSTEM_Initialize();   //set 24 MHz clock for CPU and Peripheral Bus
                            //clock period = 41,667 ns = 0,0417 us
@@ -82,6 +64,13 @@ void setup() {
     
     
     
+}
+
+void char_to_bool(char in, bool* out){
+    int i = 0;
+    for ( i = 0; i<8;i++){
+        out[7-i] = in && 1<<i;
+    }
 }
 
 void rgbw_to_uart(u8 in[], int out[]){//u8 g, u8 r, u8 b, u8 w
@@ -135,7 +124,7 @@ void loop() {
                 }
             }
         }
-        delay_us(10000);
+        delay_us(30000);
         pos++;
         if(pos==24){
             pos = 0;
