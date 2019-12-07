@@ -9,6 +9,8 @@
 #include <sys/attribs.h>
 #include <xc.h>
 
+#include "color.h"
+
 typedef char u8;
 #define LEDS 24 // Number of LEDs
 
@@ -123,28 +125,16 @@ void __ISR(_UART1_TX_VECTOR, IPL2SOFT) bufferWrite(void) {
                             // buffer
 }
 
+
+
 void create_rainbow(){
     int i;
-    char g,r,b;
     for(i=0;i<LEDS;i++){
-        if(i<LEDS/3){
-            g = 255*i/LEDS;
-            r = 255 - 255*i/LEDS;
-            b = 0;
-        }
-        else if(i < LEDS*2/3){        
-            g = 255 - 255*i/LEDS;
-            r = 0;
-            b = 255 * i / LEDS;            
-        }
-        else{
-            g = 0;
-            r = 255 * i / LEDS;
-            b = 255 - 255 * i / LEDS;
-        }
-        rainbow_color[i][0] = g;
-        rainbow_color[i][1] = r;
-        rainbow_color[i][2] = b;
+        HsvColor hsv = {.h = i/LEDS};
+        RgbColor rgb = HsvToRgb(hsv);
+        rainbow_color[i][0] = rgb.g;
+        rainbow_color[i][1] = rgb.r;
+        rainbow_color[i][2] = rgb.b;
         rainbow_color[i][3] = 0;
     }
 }
