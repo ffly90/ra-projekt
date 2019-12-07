@@ -99,28 +99,28 @@ void __ISR(_TIMER_1_VECTOR, IPL2SOFT) nextOutput(void) {
 
 
 void __ISR(_UART1_TX_VECTOR, IPL2SOFT) bufferWrite(void) {
-    // send LED color vlaues over uart
-    if(output)
-    {
-        while(U1STAbits.UTXBF == 0)
-        {
-            if(pos  == ( uart_pos / 11 )  )
-            { // if current LED to UART is current active position
-                U1TXREG = uart_rainbow[pos][uart_pos % 11 ];    // Write the data byte to the UART.
+    // interrupt 
+    // send LED color values over uart
+    if(output)    {
+        while(U1STAbits.UTXBF == 0){ // while free space in transmit buffer        
+            if(pos  == ( uart_pos / 11 )  ){// check if current uart_pos is at the activ LED
+                U1TXREG = uart_rainbow[pos][uart_pos % 11 ]; // Write the data byte to the UART.
             }else{
-                U1TXREG = uart_off[uart_pos % 11 ];    // Write the data byte to the UART.
+                U1TXREG = uart_off[uart_pos % 11 ]; // Write the data byte to the UART.
             }
             
+            // increment uart_pos to get next uart_message by next loop
             uart_pos++;
-            if(uart_pos >= 264){
+            if(uart_pos >= 11*LEDS){ // end uart transmision
                 uart_pos = 0;
                 output = false;
                 break;
             }
         }
         
-    }
-    IFS0bits.U1TXIF = 0;
+    }    
+    IFS1bits.U1TXIF = 0;    // reset interrupt flag for free space in transmit 
+                            // buffer
 }
 
 void create_rainbow(){
