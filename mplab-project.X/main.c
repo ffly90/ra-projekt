@@ -108,7 +108,7 @@ void create_rainbow(){
 
 
 void rgbw_to_uart(u8 in[], int out[]){// in =  u8 g, u8 r, u8 b, u8 w
-    bool bits[32] ;//= {r,g,b,w}; bits in order nessesarc for LED
+    bool bits[33] ={0} ;//= {r,g,b,w}; bits in order nessesarc for LED
     int i,j;
     bool temp[8]; 
     

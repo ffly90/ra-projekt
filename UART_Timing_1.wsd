@@ -1,0 +1,56 @@
+@startuml
+concise "LED Bits" as led
+robust "LED Bit Schema" as uart
+concise "UART Bits" as ub
+uart has 1,0
+Title UART zu LED-Bits Timing
+caption Zeit in ns ⟶
+
+@-300
+uart is 0
+ub is {hidden}
+led is {hidden}
+' Bit1
+@000
+led is "Bit0"
+uart is 1
+ub is StartBit
+@300
+uart is {0,1}#Green
+ub is "Bit0"
+@600
+uart is 0
+ub is "Bit1"
+@900
+ub is "Bit2"
+' Bit 2
+@1200
+led is "Bit1"
+uart is 1
+ub is "Bit3"
+@1500
+uart is {0,1} #Green
+ub is "Bit4"
+@1800
+uart is 0
+ub is "Bit5"
+@2100
+ub is "Bit6"
+' Bit 3
+@2400
+led is "Bit2"
+uart is 1
+ub is "Bit7"
+@2700
+uart is {0,1} #Green
+ub is "Bit8"
+@3000
+uart is 0
+ub is "Stop1"
+@3300
+ub is "Stop2"
+@3600
+uart is 1
+ub is {hidden}
+led is {hidden}
+@enduml
