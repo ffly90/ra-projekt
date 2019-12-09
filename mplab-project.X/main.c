@@ -20,7 +20,7 @@ int pos, dir = 1;               // position and direction of running lights
 int uart_pos = 0;
 unsigned int analog_in;             // Analog In value
 unsigned char dark[]={0,0,0,0};     // RGBW values for LED off
-unsigned char rainbow_color[LEDS][4]// RGBW values for rainbow
+unsigned char rainbow_color[LEDS][4];// RGBW values for rainbow
 unsigned int uart_rainbow[LEDS][11];// UART values for each LED
 unsigned int uart_off[11];          // UART values for LED off
 
@@ -37,46 +37,46 @@ void setup() {
                            //clock period = 41,667 ns = 0,0417 us
     
     //Zähler Konfiguration
-    T1CONbits.TGATE = 0;
-    T1CONbits.TCS = 0;
-    T1CONbits.TCKPS = 0;
-    T1CONbits.TSYNC = 0;
-    PR1 = 3225;
-    T1CONbits.ON = 1;
+    T1CONbits.TGATE     = 0;
+    T1CONbits.TCS       = 0;
+    T1CONbits.TCKPS     = 0;
+    T1CONbits.TSYNC     = 0;
+    PR1                 = 3225; // overflow interrupt and auto reset at 3225 -> 10ms
+    T1CONbits.ON        = 1;
     
     //ADC Konfiguration
-    ANSELCbits.ANSC8 = 1;
-    TRISCbits.TRISC8 = 1;
-    AD1CON1bits.SSRC = 0;
-    AD1CON1bits.MODE12 = 0;
-    AD1CHSbits.CH0SA = 14;
-    AD1CON3bits.ADRC = 0;
-    AD1CON3bits.ADCS = 0;
-    AD1CON1bits.ON = 1;
+    ANSELCbits.ANSC8    = 1;
+    TRISCbits.TRISC8    = 1;
+    AD1CON1bits.SSRC    = 0;
+    AD1CON1bits.MODE12  = 0;
+    AD1CHSbits.CH0SA    = 14;
+    AD1CON3bits.ADRC    = 0;
+    AD1CON3bits.ADCS    = 0;
+    AD1CON1bits.ON      = 1;
     //Interrupt
-    IEC0bits.T1IE = 1;
-    IFS0bits.T1IF = 0;
-    IPC4bits.T1IP = 2;
+    IEC0bits.T1IE       = 1;
+    IFS0bits.T1IF       = 0;
+    IPC4bits.T1IP       = 2;
     //AD1CON1bits.SAMP = 1;
     
     // UART CONFIGURATION
     
     // Set U1MODE Register
-    U1MODEbits.BRGH = 1; // 4x baud clock enabled
-    U1BRG = 1; // Set Counter to 1
-    U1MODEbits.CLKSEL = 0b01; // The UART1 clock is the SYSCL
-    U1MODEbits.PDSEL = 0b11; // 9 -bit data, no parity
-    U1MODEbits.SLPEN = 1; // UART1 clock runs during Sleep
-    U1MODEbits.STSEL = 1; // 2 Stop bit
-    U1MODEbits.ON = 1; // UARTx is enabled; UARTx pins are controlled by UARTx, as defined by the UEN[1:0] and UTXEN control bits
+    U1MODEbits.BRGH     = 1; // 4x baud clock enabled
+    U1BRG               = 1; // Set Counter to 1
+    U1MODEbits.CLKSEL   = 0b01; // The UART1 clock is the SYSCL
+    U1MODEbits.PDSEL    = 0b11; // 9 -bit data, no parity
+    U1MODEbits.SLPEN    = 1; // UART1 clock runs during Sleep
+    U1MODEbits.STSEL    = 1; // 2 Stop bit
+    U1MODEbits.ON       = 1; // UARTx is enabled; UARTx pins are controlled by UARTx, as defined by the UEN[1:0] and UTXEN control bits
     // Set U1STA Register
-    U1STAbits.UTXEN = 1; //UARTx transmitter is enabled, UxTX pin is controlled by UARTx (if ON = 1)
-    U1STAbits.UTXINV = 1; // UxTX Idle state is ?1?
+    U1STAbits.UTXEN     = 1; //UARTx transmitter is enabled, UxTX pin is controlled by UARTx (if ON = 1)
+    U1STAbits.UTXINV    = 1; // UxTX Idle state is ?1?
     
     // OUTPUT PIN CONFIGURATION
     TRISC = 0xEFFF;
     // INPUT PIN CONFIGURATION
-    TRISBSET = 1<<9; // set input RB9 or button s1
+    TRISBbits.TRISB9 = 1;   // set input RB9 or button s1
 }
 
 void readADC() {
