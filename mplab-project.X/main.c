@@ -59,24 +59,37 @@ void setup() {
     IPC4bits.T1IP       = 2;
     //AD1CON1bits.SAMP = 1;
     
+    // pin B9 Interrupt
+    // INT2I: External 2
+    TRISBbits.TRISB9    = 1;    // set input RB9 or button S1
+    IPC1bits.INT2IP     = 1;    // Priority: 1
+    IPC1bits.INT2IS     = 0;    // Sub Priority: 0
+    IFS0bits.INT2IF     = 0;    // external interrupt handled by extra IRS
+    CNEN0Bbits.CNIE0B9  = 0;    // deactivate rising flag interrupt
+    CNEN1Bbits.CNIE1B9  = 1;    // activate falling flag interrupt
+    
+    
+    INTCONbits.INT2EP   = 0;    // clear interrupt at falling edge bit
+    IEC0bits.INT2IE     = 1;    // enable external interrupt 2
+        
+        
     // UART CONFIGURATION
     
     // Set U1MODE Register
-    U1MODEbits.BRGH     = 1; // 4x baud clock enabled
-    U1BRG               = 1; // Set Counter to 1
+    U1MODEbits.BRGH     = 1;    // 4x baud clock enabled
+    U1BRG               = 1;    // Set Counter to 1
     U1MODEbits.CLKSEL   = 0b01; // The UART1 clock is the SYSCL
     U1MODEbits.PDSEL    = 0b11; // 9 -bit data, no parity
-    U1MODEbits.SLPEN    = 1; // UART1 clock runs during Sleep
-    U1MODEbits.STSEL    = 1; // 2 Stop bit
-    U1MODEbits.ON       = 1; // UARTx is enabled; UARTx pins are controlled by UARTx, as defined by the UEN[1:0] and UTXEN control bits
+    U1MODEbits.SLPEN    = 1;    // UART1 clock runs during Sleep
+    U1MODEbits.STSEL    = 1;    // 2 Stop bit
+    U1MODEbits.ON       = 1;    // UARTx is enabled; UARTx pins are controlled by UARTx, as defined by the UEN[1:0] and UTXEN control bits
     // Set U1STA Register
-    U1STAbits.UTXEN     = 1; //UARTx transmitter is enabled, UxTX pin is controlled by UARTx (if ON = 1)
-    U1STAbits.UTXINV    = 1; // UxTX Idle state is ?1?
+    U1STAbits.UTXEN     = 1;    // UARTx transmitter is enabled, UxTX pin is controlled by UARTx (if ON = 1)
+    U1STAbits.UTXINV    = 1;    // UxTX Idle state is ?1?
     
     // OUTPUT PIN CONFIGURATION
-    TRISC = 0xEFFF;
-    // INPUT PIN CONFIGURATION
-    TRISBbits.TRISB9 = 1;   // set input RB9 or button s1
+    //TRISC = 0xEFFF;
+    TRISCbits.TRISC12   = 0;    // set RC12 as output for UART1 TX
 }
 
 void readADC() {
@@ -169,6 +182,13 @@ void rgbw_to_uart(u8 in[], int out[]){// in =  u8 g, u8 r, u8 b, u8 w
     }
 }
 
+inline void change_direction(void){
+            dir = -1* dir;
+}
+void __ISR( _EXTERNAL_2_VECTOR,IPL2SOFT) buttonInterrupt(void){
+    change_direction();
+}
+
 void loop() {
     int i, j;
     bool in_old, in_new;
@@ -179,14 +199,17 @@ void loop() {
     rgbw_to_uart(dark ,uart_off);
     // main loop
     while(1) {
+        
+        /*
+         * nun in Interrupt
         // call button
         in_old = in_new;
         in_new = (!(PORTB & 1<<9));
         // change dir if positiv flag on button
         if(!in_old && in_new){
-            dir = -1* dir;
+            change_direction();
         }
-        
+        */
         // Read Value from Potentiometer
         readADC();
     }
