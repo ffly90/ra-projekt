@@ -4,9 +4,10 @@ typedef struct
     unsigned char r;
     unsigned char g;
     unsigned char b;
+    unsigned char w; // added by Johannes Staib
 } RgbColor;
 
-typedef struct HsvColor
+typedef struct 
 {
     unsigned char h;
     unsigned char s;

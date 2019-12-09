@@ -11,18 +11,18 @@
 
 #include "color.h"
 
-typedef char u8;
+typedef unsigned char u8;
 #define LEDS 24 // Number of LEDs
 
 
 bool output=false;               // output?
 int pos, dir = 1;               // position and direction of running lights
 int uart_pos = 0;
-unsigned int analog_in;         // Analog In value
-char dark[]={0,0,0,0};          // RGBW values for LED off
-char rainbow_color[LEDS][4];    // RGBW values for rainbow
-int uart_rainbow[LEDS][11];     // UART values for each LED
-int uart_off[11];               // UART values for LED off
+unsigned int analog_in;             // Analog In value
+unsigned char dark[]={0,0,0,0};     // RGBW values for LED off
+unsigned char rainbow_color[LEDS][4]// RGBW values for rainbow
+unsigned int uart_rainbow[LEDS][11];// UART values for each LED
+unsigned int uart_off[11];          // UART values for LED off
 
 
 void char_to_bool(char in, bool* out){
