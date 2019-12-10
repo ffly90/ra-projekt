@@ -36,7 +36,7 @@ void setup() {
     PR1                 = 938; // overflow interrupt and auto reset at 3225 -> 10ms
     //Timer Interrupt
     IEC0bits.T1IE       = 1;
-    IPC4bits.T1IP       = 3;
+    IPC4bits.T1IP       = 4;
     
     
     // UART CONFIGURATION
@@ -59,8 +59,7 @@ void setup() {
     // pin B9 Interrupt
     // INT2I: External 2
     TRISBbits.TRISB9    = 1;    // set input RB9 or button S1
-    IPC1bits.INT2IP     = 1;    // Priority: 1
-    IPC1bits.INT2IS     = 0;    // Sub Priority: 0
+    IPC1bits.INT2IP     = 2;    // Priority: 2
     IFS0bits.INT2IF     = 0;    // external interrupt handled by extra IRS
     CNEN0Bbits.CNIE0B9  = 0;    // deactivate rising flag interrupt
     CNEN1Bbits.CNIE1B9  = 1;    // activate falling flag interrupt
@@ -68,6 +67,20 @@ void setup() {
     INTCONbits.INT2EP   = 0;    // clear interrupt at falling edge bit
     IEC0bits.INT2IE     = 1;    // enable external interrupt 2
     
+    // RC8 (AN14) is Potentiometer input
+    ANSELCbits.ANSC8 = 1;   // RC8 input
+    TRISCbits.TRISC8 = 1;
+    AD1CHSbits.CH0SA = 14;  // AN14 input
+    AD1CON1bits.ON = 1;     // ADC on
+    AD1CON1bits.MODE12 = 1; // 12-bit mode
+    AD1CON1bits.SSRC = 7;   // Auto-convert
+    AD1CON1bits.ASAM = 1;   // Auto-sample
+    AD1CON2bits.SMPI = 15;  // Interrupt every 16th sample
+    AD1CON3bits.ADCS = 255; // Fad = 24,000,000 Hz / 510 = 47058 Hz
+    AD1CON3bits.SAMC = 31;  // Sample Freq = 47058 Hz / 31 = 1518 Hz
+    IEC1bits.AD1IE = 1;     // ADC interrupt enable
+    IPC8bits.AD1IP = 3;     // ADC priority 4
+    IPC8bits.AD1IS = 1;
 }
 
 void __ISR(_EXTERNAL_2_VECTOR, IPL2SOFT) buttonInterrupt(void){
@@ -75,7 +88,10 @@ void __ISR(_EXTERNAL_2_VECTOR, IPL2SOFT) buttonInterrupt(void){
     IFS0bits.INT2IF = 0;
 }
 
-
+void __ISR(_ADC_VECTOR, IPL3AUTO) ADCHandler(void){
+    PR1 = 938+(938*99*ADC1BUF0/4095); // max freq for new led 100Hz , min freq 1Hz
+    IFS1bits.AD1IF = 0;
+}
 void create_rainbow(){
     int i;
     for(i=0;i<LEDS;i++){
@@ -134,7 +150,7 @@ void display(int pos, int active){
     }
 }
 
-void __ISR(_TIMER_1_VECTOR, IPL3SOFT) nextOutput(void) {
+void __ISR(_TIMER_1_VECTOR, IPL4SOFT) nextOutput(void) {
     // send LED color vlaues over uart
     int j;
     for (j=0;j<LEDS;j++){
