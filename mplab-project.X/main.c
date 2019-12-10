@@ -33,7 +33,7 @@ void setup() {
     T1CONbits.TCS       = 0;
     T1CONbits.TCKPS     = 0b11;
     T1CONbits.TSYNC     = 0;
-    PR1                 = 3225; // overflow interrupt and auto reset at 3225 -> 10ms
+    PR1                 = 938; // overflow interrupt and auto reset at 3225 -> 10ms
     //Timer Interrupt
     IEC0bits.T1IE       = 1;
     IPC4bits.T1IP       = 3;
@@ -87,8 +87,6 @@ void create_rainbow(){
         rainbow_color[i][3] = rgb.w;
     }
 }
-
-
 
 void rgbw_to_uart(unsigned char in[], int out[]){// in =  u8 g, u8 r, u8 b, u8 w
     int i,j;
