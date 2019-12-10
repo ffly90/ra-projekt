@@ -111,15 +111,6 @@ void create_rainbow(){
         rainbow_color[i][2] = rgb.b;
         rainbow_color[i][3] = rgb.w;
     }
-    for (i = 0; i<LEDS; i++){
-        for (j = 0; j<LEDS; j++){
-            if(i == ( uart_pos / 11 )){// check if current uart_pos is at the activ LED
-                buffer[i][j] = uart_rainbow[i][uart_pos % 11 ]; // Write the data byte to the UART.
-            }else{
-                buffer[i][j] = uart_off[uart_pos % 11 ]; // Write the data byte to the UART.
-            }
-        }
-    }
 }
 
 void rgbw_to_uart(unsigned char in[], int out[]){// in =  u8 g, u8 r, u8 b, u8 w
@@ -233,42 +224,72 @@ void __ISR(_UART1_TX_VECTOR, IPL5SRS) display(){
 //    :
 //    );
     
-        if (pos == (uart_pos / 11))
-    {
-        //U1TXREG = uart_rainbow[pos][uart_pos % 11 ];
-        
-        asm volatile(
+    asm volatile("nop\n\t");
+    asm volatile(
         ".set at\n\t"
         "sll $t0, %[pos], 2\n\t"
         "mul $t0, $t0, %[eleven]\n\t"
         "divu $0, %[uart_pos], %[eleven]\n\t"
         "mfhi $t1\n\t"
-        "sll $t1, $t1, 2\n\t"
+        "mflo $t3\n\t"
+        "beq $t3, %[pos], if \n\t"
+        
+        "sll $t2, $t1, 2\n\t"
+        "add $t1, $t2, %[uart_off]\n\t"
+        "lw $t1, 0($t1)\n\t"
+        "sw $t1, U1TXREG\n\t"
+        "j endif\n\t"
+        
+        "if:"
+        "sll $t2, $t1, 2\n\t"
         "add $t0, $t0, %[uart_rainbow]\n\t"
-        "add $t0, $t0, $t1\n\t"
+        "add $t0, $t0, $t2\n\t"
         "lw $t0, 0($t0)\n\t"
-        "sw $t0, U1TXREG"
+        "sw $t0, U1TXREG\n\t"
+
+        "endif:"
         :
         : [uart_rainbow] "r" (uart_rainbow), [pos] "r" (pos), [eleven] "r" (11), [uart_pos] "r" (uart_pos), [uart_off] "r" (uart_off)
-        : "t0", "t1", "t2"
-        );
-    }
-    else
-    {
-        asm volatile(
-        ".set at\n\t"
-        "divu $0, %[uart_pos], %[eleven]\n\t"
-        "mfhi $t1\n\t"
-        "sll $t1, $t1, 2\n\t"
-        "add $t1, $t1, %[uart_off]\n\t"
-        "lw $t1, 0($t1)\n\t"
-        "sw $t1, U1TXREG"
-        :
-        : [uart_off] "r" (uart_off), [eleven] "r" (11), [uart_pos] "r" (uart_pos)
-        : "t1"
-        );
-        //U1TXREG = uart_off[uart_pos % 11];
-    }
+        : "t0", "t1", "t2", "t3"
+    );
+
+    
+//        if (pos == (uart_pos / 11))
+//    {
+//        //U1TXREG = uart_rainbow[pos][uart_pos % 11 ];
+//        
+//        asm volatile(
+//        ".set at\n\t"
+//        "sll $t0, %[pos], 2\n\t"
+//        "mul $t0, $t0, %[eleven]\n\t"
+//        "divu $0, %[uart_pos], %[eleven]\n\t"
+//        "mfhi $t1\n\t"
+//        "sll $t2, $t1, 2\n\t"
+//        "add $t0, $t0, %[uart_rainbow]\n\t"
+//        "add $t0, $t0, $t2\n\t"
+//        "lw $t0, 0($t0)\n\t"
+//        "sw $t0, U1TXREG"
+//        :
+//        : [uart_rainbow] "r" (uart_rainbow), [pos] "r" (pos), [eleven] "r" (11), [uart_pos] "r" (uart_pos), [uart_off] "r" (uart_off)
+//        : "t0", "t1", "t2"
+//        );
+//    }
+//    else
+//    {
+//        asm volatile(
+//        ".set at\n\t"
+//        "divu $0, %[uart_pos], %[eleven]\n\t"
+//        "mfhi $t1\n\t"
+//        "sll $t2, $t1, 2\n\t"
+//        "add $t1, $t2, %[uart_off]\n\t"
+//        "lw $t1, 0($t1)\n\t"
+//        "sw $t1, U1TXREG"
+//        :
+//        : [uart_off] "r" (uart_off), [eleven] "r" (11), [uart_pos] "r" (uart_pos)
+//        : "t1", "t2"
+//        );
+//        //U1TXREG = uart_off[uart_pos % 11];
+//    }
     
 //    asm volatile(
 //    ".set at            \n\t"
