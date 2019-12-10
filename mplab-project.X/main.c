@@ -40,7 +40,6 @@ void setup() {
     T1CONbits.TCKPS = 0;
     T1CONbits.TSYNC = 0;
     PR1 = 3225;
-    T1CONbits.ON = 1;
     
     //ADC Konfiguration
     ANSELCbits.ANSC8 = 1;
@@ -69,7 +68,7 @@ void setup() {
     U1MODEbits.ON = 1; // UARTx is enabled; UARTx pins are controlled by UARTx, as defined by the UEN[1:0] and UTXEN control bits
     // Set U1STA Register
     U1STAbits.UTXEN = 1; //UARTx transmitter is enabled, UxTX pin is controlled by UARTx (if ON = 1)
-    U1STAbits.UTXINV = 1; // UxTX Idle state is ?1?
+    U1STAbits.UTXINV = 1; // UxTX Idle state is ?1?    
     
     // OUTPUT PIN CONFIGURATION
     TRISC = 0xEFFF;
@@ -85,20 +84,7 @@ void readADC() {
     AD1CON1bits.SAMP = 0;
 }
 
-void __ISR(_TIMER_1_VECTOR, IPL2SOFT) nextOutput(void) {
-    // step direction for running lights
-    pos += dir;
-    if(pos>=LEDS){
-        pos = 0;
-    }else if(pos<=0){
-        pos = LEDS;
-    } 
-    output = true; // if active uart values will be written to fifo buffer
-    IFS0bits.T1IF = 0;
-}
-
-
-void __ISR(_UART1_TX_VECTOR, IPL2SOFT) bufferWrite(void) {
+void __ISR(_UART1_TX_VECTOR, IPL5SOFT) bufferWrite(void) {
     // send LED color vlaues over uart
     if(output)
     {
@@ -121,6 +107,19 @@ void __ISR(_UART1_TX_VECTOR, IPL2SOFT) bufferWrite(void) {
         
     }
     IFS1bits.U1TXIF = 0;
+}
+
+void __ISR(_TIMER_1_VECTOR, IPL4SOFT) nextOutput(void) {
+    // step direction for running lights
+    pos += dir;
+    if(pos>=LEDS){
+        pos = 0;
+    }else if(pos<=0){
+        pos = LEDS;
+    } 
+    output = true; // if active uart values will be written to fifo buffer
+    bufferWrite();
+    IFS0bits.T1IF = 0;
 }
 
 void create_rainbow(){
@@ -181,12 +180,16 @@ void rgbw_to_uart(u8 in[], int out[]){// in =  u8 g, u8 r, u8 b, u8 w
 
 void loop() {
     int i, j;
-    bool in_old, in_new;
+    bool in_old=false, in_new=false;
     // create uart muster
     for(i=0; i<LEDS; i++){
         rgbw_to_uart(rainbow_color[i], uart_rainbow[i]);
     }
-    rgbw_to_uart(dark ,uart_off);
+    rgbw_to_uart(dark, uart_off);
+    // Enable Transmission Interrupt
+    IEC1bits.U1TXIE = 1; 
+    // start timer
+    T1CONbits.ON = 1;
     // main loop
     while(1) {
         // call button
@@ -198,7 +201,7 @@ void loop() {
         }
         
         // Read Value from Potentiometer
-        readADC();
+        //readADC();
     }
 }
 
