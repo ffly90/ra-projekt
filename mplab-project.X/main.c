@@ -6,6 +6,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <sys/attribs.h>
 #include <xc.h>
 #include "color.h"
 
@@ -16,7 +17,7 @@ unsigned char dark[]={0,0,0,0};          // RGBW values for LED off
 unsigned char rainbow_color[LEDS][4];    // RGBW values for rainbow
 int uart_rainbow[LEDS][11];     // UART values for each LED
 int uart_off[11];               // UART values for LED off
-
+char dir = 1; // init direction
 
 void char_to_bool(char in, bool out[]){
     int i = 0;
@@ -45,10 +46,27 @@ void setup() {
     
     // OUTPUT PIN CONFIGURATION
     TRISC = 0xEFFF;
-    // INPUT PIN CONFIGURATION
-    TRISBSET = 1<<9; // set input RB9 or button s1
-}
     
+    // pin B9 Interrupt
+    // INT2I: External 2
+    TRISBbits.TRISB9    = 1;    // set input RB9 or button S1
+    IPC1bits.INT2IP     = 1;    // Priority: 1
+    IPC1bits.INT2IS     = 0;    // Sub Priority: 0
+    IFS0bits.INT2IF     = 0;    // external interrupt handled by extra IRS
+    CNEN0Bbits.CNIE0B9  = 0;    // deactivate rising flag interrupt
+    CNEN1Bbits.CNIE1B9  = 1;    // activate falling flag interrupt
+    
+    INTCONbits.INT2EP   = 0;    // clear interrupt at falling edge bit
+    IEC0bits.INT2IE     = 1;    // enable external interrupt 2
+    
+}
+
+void __ISR(_EXTERNAL_2_VECTOR, IPL2SOFT) buttonInterrupt(void){
+    dir = -1* dir;
+    IFS0bits.INT2IF = 0;
+}
+
+
 void create_rainbow(){
     int i;
     for(i=0;i<LEDS;i++){
@@ -106,8 +124,7 @@ void display(int pos, int active){
 }
 
 void loop() {
-    int i, j, pos, dir=1;
-    bool in_old, in_new;
+    int i, j, pos;
     // create uart muster
     create_rainbow();
     for(i=0; i<LEDS; i++){
@@ -115,15 +132,7 @@ void loop() {
     }
     rgbw_to_uart(dark ,uart_off);
     // main loop
-    while(1) {
-        // call button
-        in_old = in_new;
-        in_new = (!(PORTB & 1<<9));
-        // change dir if positiv flag on button
-        if(!in_old && in_new){
-            dir = -1* dir;
-        }
-        
+    while(1) {        
         // send LED color vlaues over uart
         for (j=0;j<LEDS;j++){
             display(pos, j);
