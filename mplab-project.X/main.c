@@ -120,7 +120,7 @@ void __ISR(_UART1_TX_VECTOR, IPL2SOFT) bufferWrite(void) {
         }
         
     }
-    IFS0bits.U1TXIF = 0;
+    IFS1bits.U1TXIF = 0;
 }
 
 void create_rainbow(){
