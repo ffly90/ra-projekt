@@ -153,16 +153,15 @@ void display(int pos, int active){
 void __ISR(_TIMER_1_VECTOR, IPL4SOFT) nextOutput(void) {
     // send LED color vlaues over uart
     int j;
-    for (j=0;j<LEDS;j++){
-        display(pos, j);
-    }
-
     // step direction for running lights
     pos += dir;
     if(pos>=LEDS){
         pos = 0;
     }else if(pos<0){
-        pos = LEDS;
+        pos = LEDS-1;
+    }
+    for (j=0;j<LEDS;j++){
+        display(pos, j);
     }
     IFS0bits.T1IF = 0; // reset interrupt flag
 }
