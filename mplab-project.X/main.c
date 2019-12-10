@@ -7,20 +7,21 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <xc.h>
+#include "color.h"
 
 typedef char u8;
 #define LEDS 24 // Number of LEDs
 
-char dark[]={0,0,0,0};          // RGBW values for LED off
-char rainbow_color[LEDS][4];    // RGBW values for rainbow
+unsigned char dark[]={0,0,0,0};          // RGBW values for LED off
+unsigned char rainbow_color[LEDS][4];    // RGBW values for rainbow
 int uart_rainbow[LEDS][11];     // UART values for each LED
 int uart_off[11];               // UART values for LED off
 
 
-void char_to_bool(char in, bool* out){
+void char_to_bool(char in, bool out[]){
     int i = 0;
     for ( i = 0; i<8;i++){
-        out[7-i] = in && 1<<i;
+        out[7-i] = in & 1<<i;
     }
 }
 
@@ -50,35 +51,20 @@ void setup() {
     
 void create_rainbow(){
     int i;
-    char g,r,b;
     for(i=0;i<LEDS;i++){
-        if(i<LEDS/3){
-            g = 255*i/LEDS;
-            r = 255 - 255*i/LEDS;
-            b = 0;
-        }
-        else if(i < LEDS*2/3){        
-            g = 255 - 255*i/LEDS;
-            r = 0;
-            b = 255 * i / LEDS;            
-        }
-        else{
-            g = 0;
-            r = 255 * i / LEDS;
-            b = 255 - 255 * i / LEDS;
-        }
-        rainbow_color[i][0] = g;
-        rainbow_color[i][1] = r;
-        rainbow_color[i][2] = b;
-        rainbow_color[i][3] = 0;
+        HsvColor hsv = {.h = 255*i/(LEDS-1), .s = 255, .v = 255};
+        RgbColor rgb = HsvToRgb(hsv);
+        rainbow_color[i][0] = rgb.g;
+        rainbow_color[i][1] = rgb.r;
+        rainbow_color[i][2] = rgb.b;
+        rainbow_color[i][3] = rgb.w;
     }
 }
 
-
-void rgbw_to_uart(u8 in[], int out[]){// in =  u8 g, u8 r, u8 b, u8 w
-    bool bits[32] ;//= {r,g,b,w}; bits in order nessesarc for LED
+void rgbw_to_uart(unsigned char in[], int out[]){// in =  u8 g, u8 r, u8 b, u8 w
     int i,j;
-    bool temp[8]; 
+    bool temp[8];
+    bool bits[32] ;//= {r,g,b,w}; bits in order nessesarc for LED
     
     for(i=0;i<4;i++){
         char_to_bool(in[i],temp);
@@ -123,6 +109,7 @@ void loop() {
     int i, j, pos, dir=1;
     bool in_old, in_new;
     // create uart muster
+    create_rainbow();
     for(i=0; i<LEDS; i++){
         rgbw_to_uart(rainbow_color[i], uart_rainbow[i]);
     }
@@ -141,6 +128,8 @@ void loop() {
         for (j=0;j<LEDS;j++){
             display(pos, j);
         }
+        delay_us(10000); // delay between the steps
+        delay_us(10000); // delay between the steps
         delay_us(10000); // delay between the steps
         
         // step direction for running lights
