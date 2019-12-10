@@ -13,16 +13,14 @@
 typedef char u8;
 #define LEDS 24 // Number of LEDs
 
-unsigned char dark[]={0,0,0,0};          // RGBW values for LED off
-unsigned char rainbow_color[LEDS][4];    // RGBW values for rainbow
+unsigned char dark[]={0,0,0,0};          // GRBW values for LED off
+unsigned char rainbow_color[LEDS][4];    // GRBW values for rainbow
 int uart_rainbow[LEDS][11];     // UART values for each LED
 int uart_off[11];               // UART values for LED off
-char dir = 1; // init direction
-char pos=0; // current active LED
-
-void char_to_bool(char in, bool out[]){
-
-}
+char dir = 1;                   // init direction
+char pos=0;                     // current active LED
+bool update=false;              // if true new LED will be written to UART Buffer
+int uart_pos = 0;               // #UART message
 
 void setup() { 
 	SYSTEM_Initialize();   //set 24 MHz clock for CPU and Peripheral Bus
@@ -54,7 +52,7 @@ void setup() {
     U1STAbits.UTXINV = 1; // UxTX Idle state is ?1?
     
     // OUTPUT PIN CONFIGURATION
-    TRISC = 0xEFFF;
+    TRISCbits.TRISC12   = 0;    // set RC12 as output for UART1 TX
     
     // pin B9 Interrupt
     // INT2I: External 2
@@ -76,6 +74,7 @@ void setup() {
     AD1CON1bits.SSRC = 7;   // Auto-convert
     AD1CON1bits.ASAM = 1;   // Auto-sample
     AD1CON2bits.SMPI = 15;  // Interrupt every 16th sample
+    AD1CON3bits.ADRC = 1;   // Select fast RC Osc
     AD1CON3bits.ADCS = 255; // Fad = 24,000,000 Hz / 510 = 47058 Hz
     AD1CON3bits.SAMC = 31;  // Sample Freq = 47058 Hz / 31 = 1518 Hz
     IEC1bits.AD1IE = 1;     // ADC interrupt enable
@@ -151,8 +150,6 @@ void display(int pos, int active){
 }
 
 void __ISR(_TIMER_1_VECTOR, IPL4SOFT) nextOutput(void) {
-    // send LED color vlaues over uart
-    int j;
     // step direction for running lights
     pos += dir;
     if(pos>=LEDS){
@@ -160,10 +157,30 @@ void __ISR(_TIMER_1_VECTOR, IPL4SOFT) nextOutput(void) {
     }else if(pos<0){
         pos = LEDS-1;
     }
-    for (j=0;j<LEDS;j++){
-        display(pos, j);
-    }
+    update = true;
     IFS0bits.T1IF = 0; // reset interrupt flag
+}
+
+
+void writeUart(){
+    int j;
+    if(update){
+        while(U1STAbits.UTXBF == 0){ // while free space in transmit buffer        
+            if(pos  == ( uart_pos / 11 )  ){// check if current uart_pos is at the activ LED
+                U1TXREG = uart_rainbow[pos][uart_pos % 11 ]; // Write the data byte to the UART.
+            }else{
+                U1TXREG = uart_off[uart_pos % 11 ]; // Write the data byte to the UART.
+            }
+            
+            // increment uart_pos to get next uart_message by next loop
+            uart_pos++;
+            if(uart_pos >= 11*LEDS){ // end uart transmision
+                uart_pos = 0;
+                update = false;
+                break;
+            }
+        }
+    }
 }
 
 void loop() {
@@ -178,6 +195,7 @@ void loop() {
     T1CONbits.ON = 1;
     // main loop
     while(1) {
+        writeUart();
     }
 }
 
