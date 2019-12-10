@@ -18,17 +18,26 @@ unsigned char rainbow_color[LEDS][4];    // RGBW values for rainbow
 int uart_rainbow[LEDS][11];     // UART values for each LED
 int uart_off[11];               // UART values for LED off
 char dir = 1; // init direction
+char pos=0; // current active LED
 
 void char_to_bool(char in, bool out[]){
-    int i = 0;
-    for ( i = 0; i<8;i++){
-        out[7-i] = in & 1<<i;
-    }
+
 }
 
 void setup() { 
 	SYSTEM_Initialize();   //set 24 MHz clock for CPU and Peripheral Bus
                            //clock period = 41,667 ns = 0,0417 us
+    
+    //Zähler Konfiguration
+    T1CONbits.TGATE     = 0;
+    T1CONbits.TCS       = 0;
+    T1CONbits.TCKPS     = 0b11;
+    T1CONbits.TSYNC     = 0;
+    PR1                 = 3225; // overflow interrupt and auto reset at 3225 -> 10ms
+    //Timer Interrupt
+    IEC0bits.T1IE       = 1;
+    IPC4bits.T1IP       = 3;
+    
     
     // UART CONFIGURATION
     
@@ -70,7 +79,7 @@ void __ISR(_EXTERNAL_2_VECTOR, IPL2SOFT) buttonInterrupt(void){
 void create_rainbow(){
     int i;
     for(i=0;i<LEDS;i++){
-        HsvColor hsv = {.h = 255*i/(LEDS-1), .s = 255, .v = 255};
+        HsvColor hsv = {.h = 255*i/(LEDS-1), .s = 255, .v = 32};
         RgbColor rgb = HsvToRgb(hsv);
         rainbow_color[i][0] = rgb.g;
         rainbow_color[i][1] = rgb.r;
@@ -79,13 +88,17 @@ void create_rainbow(){
     }
 }
 
+
+
 void rgbw_to_uart(unsigned char in[], int out[]){// in =  u8 g, u8 r, u8 b, u8 w
     int i,j;
     bool temp[8];
     bool bits[32] ;//= {r,g,b,w}; bits in order nessesarc for LED
     
     for(i=0;i<4;i++){
-        char_to_bool(in[i],temp);
+        for (j = 0; j<8; j++){
+            temp[7-j] = in[i] & 1<<j;
+        }
         for(j=0;j<8;j++){
             bits[i*8+j] = temp[j];
         }
@@ -123,31 +136,35 @@ void display(int pos, int active){
     }
 }
 
+void __ISR(_TIMER_1_VECTOR, IPL3SOFT) nextOutput(void) {
+    // send LED color vlaues over uart
+    int j;
+    for (j=0;j<LEDS;j++){
+        display(pos, j);
+    }
+
+    // step direction for running lights
+    pos += dir;
+    if(pos>=LEDS){
+        pos = 0;
+    }else if(pos<0){
+        pos = LEDS;
+    }
+    IFS0bits.T1IF = 0; // reset interrupt flag
+}
+
 void loop() {
-    int i, j, pos;
+    int i;
     // create uart muster
     create_rainbow();
     for(i=0; i<LEDS; i++){
         rgbw_to_uart(rainbow_color[i], uart_rainbow[i]);
     }
-    rgbw_to_uart(dark ,uart_off);
+    rgbw_to_uart(dark, uart_off);
+    IFS0bits.T1IF = 0;
+    T1CONbits.ON = 1;
     // main loop
-    while(1) {        
-        // send LED color vlaues over uart
-        for (j=0;j<LEDS;j++){
-            display(pos, j);
-        }
-        delay_us(10000); // delay between the steps
-        delay_us(10000); // delay between the steps
-        delay_us(10000); // delay between the steps
-        
-        // step direction for running lights
-        pos += dir;
-        if(pos>=LEDS){
-            pos = 0;
-        }else if(pos<=0){
-            pos = LEDS;
-        } 
+    while(1) {
     }
 }
 
