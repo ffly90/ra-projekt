@@ -50,6 +50,10 @@ void setup() {
     // Set U1STA Register
     U1STAbits.UTXEN = 1; //UARTx transmitter is enabled, UxTX pin is controlled by UARTx (if ON = 1)
     U1STAbits.UTXINV = 1; // UxTX Idle state is ?1?
+    //UART Interrupt
+    U1STAbits.UTXSEL = 0; // Interrupt if at least one empty space in buffer
+    IPC13bits.U1TXIP = 5; // set interrupt prio to 5
+    IFS1bits.U1TXIF = 0; // clear interrupt flag
     
     // OUTPUT PIN CONFIGURATION
     TRISCbits.TRISC12   = 0;    // set RC12 as output for UART1 TX
@@ -159,10 +163,11 @@ void __ISR(_TIMER_1_VECTOR, IPL4SOFT) nextOutput(void) {
     }
     update = true;
     IFS0bits.T1IF = 0; // reset interrupt flag
+    IEC1bits.U1TXIE = 1; // enable Interrupt
 }
 
 
-void writeUart(){
+void __ISR(_UART1_TX_VECTOR, IPL5SOFT) writeUart(){
     int j;
     if(update){
         while(U1STAbits.UTXBF == 0){ // while free space in transmit buffer        
@@ -177,10 +182,12 @@ void writeUart(){
             if(uart_pos >= 11*LEDS){ // end uart transmision
                 uart_pos = 0;
                 update = false;
+                IEC1bits.U1TXIE = 0; // disable Interrupt
                 break;
             }
         }
     }
+    IFS1bits.U1TXIF = 0;
 }
 
 void loop() {
@@ -195,7 +202,6 @@ void loop() {
     T1CONbits.ON = 1;
     // main loop
     while(1) {
-        writeUart();
     }
 }
 
