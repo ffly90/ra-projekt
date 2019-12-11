@@ -1,8 +1,14 @@
 /*
- First PIC32MM program
- 
- This simple example program lets LED1 blink
- */
+* LED running light with uart
+* by Steffen Walter and Johannes Staib
+*
+*
+*
+* -- naming convention --
+* Update process    ->  write new rgbw values to all LEDs   =  LEDs * LED messages
+* LED message       ->  rgbw values as 32-Bits for one LED  =  11 * uart messages
+* uart message      ->  bits for one uart transmit          =  3 LED-Bits
+*/
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -28,7 +34,7 @@ void setup() {
 	SYSTEM_Initialize();   //set 24 MHz clock for CPU and Peripheral Bus
                            //clock period = 41,667 ns = 0,0417 us
     
-    //Zähler Konfiguration
+    //Zï¿½hler Konfiguration
     T1CONbits.TGATE     = 0;
     T1CONbits.TCS       = 0;
     T1CONbits.TCKPS     = 0b11;
@@ -89,11 +95,21 @@ void setup() {
 }
 
 void __ISR(_EXTERNAL_2_VECTOR, IPL2SOFT) buttonInterrupt(void){
-    dir = -1* dir;
-    IFS0bits.INT2IF = 0;
+    /*
+    * pin falling edge interrupt
+    * - occur if button s1 is pressed
+    * - changing running light direction
+    */
+    dir = -1* dir;          // change running light direction
+    IFS0bits.INT2IF = 0;    // clear interrupt flag
 }
 
 void __ISR(_ADC_VECTOR, IPL3AUTO) ADCHandler(void){
+    /*
+    * adc measuring finished interrupt
+    * - occurs if the autosampeling finished a conversion
+    * - update the timer auto reset value
+    */
     adc_offset++;
     if(adc_offset == 10){
         PR1 = 938+(938*99*ADC1BUF0/4095); // max freq for new led 100Hz , min freq 1Hz
@@ -116,48 +132,52 @@ void create_rainbow(){
 void rgbw_to_uart(unsigned char in[], int out[]){// in =  u8 g, u8 r, u8 b, u8 w
     int i,j;
     bool temp[8];
-    bool bits[32] ;//= {r,g,b,w}; bits in order nessesarc for LED
+    bool bits[32];//= {r,g,b,w}; bits in order nessesarc for LED
     
+    // transfer rgbw values to one 32-Bit array 
+    // r[7] -> bits[0]
+    // w[0] -> bits[31]
     for(i=0;i<4;i++){
-        for (j = 0; j<8; j++){
-            temp[7-j] = in[i] & 1<<j;
-        }
-        for(j=0;j<8;j++){
-            bits[i*8+j] = temp[j];
-        }
+        for(j = 0; j<8; j++){ temp[7-j] = in[i] & 1<<j; }
+        for(j=0;j<8;j++){ bits[i*8+j] = temp[j]; }
     }
-    for(i=0;i<11;i+=1){
-        unsigned int uart_val= 0b010001000;
-        if(bits[i*3]){
-            uart_val |= 0b1;
-        }
-        if(bits[i*3+1]){
-            uart_val |= 0b10000;
-        }
-        if(bits[i*3+2]){
-            uart_val |= 0b100000000;
-        }
-        if(i==10){
-            uart_val &= 0b001111111;
-        }
-        out[i]=~uart_val;
+
+    // create uart messages
+    for(i=0;i<11;i+=1){ // loop through all uart messages for on LED message
+        unsigned int uart_val= 0b010001000; // default uart message with only zeros as LED-Bits
+        // set longer high time for ones
+        if(bits[i*3]){  uart_val |= 0b1;}
+        if(bits[i*3+1]){uart_val |= 0b10000;}
+        if(bits[i*3+2]){uart_val |= 0b100000000;}
+        // clear last bit
+        if(i==10){uart_val &= 0b001111111;} // set thirty-third LED-Bit to nothing (no high puls)  
+        out[i]=~uart_val; // convert from positiv to negativ logic
     }
 }
 
 void __ISR(_TIMER_1_VECTOR, IPL4SOFT) nextOutput(void) {
+    /*
+    * timer interrupt
+    * - occurs on timer auto reset
+    * - the auto reset value is depending from adc value
+    */
+
     // step direction for running lights
     pos += dir;
-    if(pos>=LEDS){
-        pos = 0;
-    }else if(pos<0){
-        pos = LEDS-1;
-    }
+    // check if 
+    if(pos>=LEDS){  pos = 0;}
+    else if(pos<0){ pos = LEDS-1;}
     IFS0bits.T1IF = 0; // reset interrupt flag
     IEC1bits.U1TXIE = 1; // enable Interrupt
 }
 
 
 void __ISR(_UART1_TX_VECTOR, IPL5SRS) display(){
+    /*
+    * uart tx interrupt --
+    * - occurs it there is empty space in uart tx fifo buffer
+    * - filling new uart message in to fifo buffer
+    */
     asm volatile("nop");
 //    asm volatile(
 //    ".set at\n\t"
@@ -338,22 +358,21 @@ void __ISR(_UART1_TX_VECTOR, IPL5SRS) display(){
         uart_pos = 0;
         IEC1bits.U1TXIE = 0; // disable Interrupt
     }
-    IFS1bits.U1TXIF = 0;
+    IFS1bits.U1TXIF = 0; // clear interrupt flag
 }
 
 void loop() {
     int i;
     // create uart muster
-    create_rainbow();
-    for(i=0; i<LEDS; i++){
-        rgbw_to_uart(rainbow_color[i], uart_rainbow[i]);
-    }
-    rgbw_to_uart(dark, uart_off);
-    IFS0bits.T1IF = 0;
-    T1CONbits.ON = 1;
+    create_rainbow(); // create rgb rainbow
+    for(i=0; i<LEDS; i++){rgbw_to_uart(rainbow_color[i], uart_rainbow[i]);} // rgb to uart messages
+    rgbw_to_uart(dark, uart_off); // create uart message for LED off
+
+    // start LED running light
+    IFS0bits.T1IF   = 0;    // clear timer interrupt flag
+    T1CONbits.ON    = 1;    // start timer
     // main loop
-    while(1) {
-    }
+    while(1) {}
 }
 
 int main(void) {
