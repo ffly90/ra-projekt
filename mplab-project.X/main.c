@@ -22,24 +22,26 @@
 // precalculat arrays
 uint8_t         rgbw_dark[]={0,0,0,0};      // GRBW values for LED off
 uint8_t         rgbw_rainbow[LEDS][4];      // GRBW values for rainbow
-uint32_t        uart_rainbow_msg[LEDS][11]; // UART values for each LED
-uint32_t        uart_off_msg[11];           // UART values for LED off
-uint32_t        *uart_map[LEDS*11];
+uint16_t        uart_rainbow_msg[LEDS][11]; // UART values for each LED
+uint16_t        uart_off_msg[11];           // UART values for LED off
 
-uint32_t        test[LEDS*12];
-uint32_t        t = 0;
-bool            o = 1;
+
 // running light values
-int8_t          dir = 1;                        // init direction
-int8_t          pos=0;                          // current active LED
+int8_t          running_light_direction = 1;    // init direction
+int8_t          active_LED =0;                  // current active LED
+
+// variables to map between rainbow color uart messages and current active LED
+uint16_t        *uart_map[LEDS*11];             // pointer array for easy access to next uart message
 #define         FIRST_UART_MAP_ELEMENT_ADDRESS  &uart_map[0]
                                                 // address of first element in uart_map
 #define         LAST_UART_MAP_ELEMENT_ADDRESS   &uart_map[LEDS*11 - 1]
                                                 // address of last  element in uart_map
-uint32_t**      uart_msg_ptr = FIRST_UART_MAP_ELEMENT_ADDRESS;// #UART message
-uint8_t         adc_offset = 0;                 // adc sample offset
-uint32_t        **f = FIRST_UART_MAP_ELEMENT_ADDRESS;
-uint32_t        **l = LAST_UART_MAP_ELEMENT_ADDRESS;
+uint16_t**      uart_msg_ptr = FIRST_UART_MAP_ELEMENT_ADDRESS;// #UART message
+
+// avariable for adc
+uint8_t         adc_freq_divider = 0;           // to only use every 10th sampeling
+
+
 void setup() { 
 	SYSTEM_Initialize();   //set 24 MHz clock for CPU and Peripheral Bus
                            //clock period = 41,667 ns = 0,0417 us
@@ -104,7 +106,7 @@ void setup() {
     IPC8bits.AD1IS = 1;
     
 }
-void rgbw_to_uart(uint8_t in[], uint32_t out[]){// in =  u8 g, u8 r, u8 b, u8 w
+void rgbw_to_uart(uint8_t in[], uint16_t out[]){// in =  u8 g, u8 r, u8 b, u8 w
     int i,j;
     bool temp[8];
     bool bits[32];//= {r,g,b,w}; bits in order nessesarc for LED
@@ -159,7 +161,7 @@ void __ISR(_EXTERNAL_2_VECTOR, IPL2SOFT) buttonInterrupt(void){
     * - occur if button s1 is pressed
     * - changing running light direction
     */
-    dir = -1* dir;          // change running light direction
+    running_light_direction = -1* running_light_direction;          // change running light direction
     IFS0bits.INT2IF = 0;    // clear interrupt flag
 }
 void __ISR(_ADC_VECTOR, IPL3AUTO) ADCHandler(void){
@@ -168,10 +170,10 @@ void __ISR(_ADC_VECTOR, IPL3AUTO) ADCHandler(void){
     * - occurs if the autosampeling finished a conversion
     * - update the timer auto reset value
     */
-    adc_offset++;
-    if(adc_offset == 10){
+    adc_freq_divider++;
+    if(adc_freq_divider == 10){
         PR1 = 938+(938*99*ADC1BUF0/4095); // max freq for new led 100Hz , min freq 1Hz
-        adc_offset = 0;
+        adc_freq_divider = 0;
     }
     IFS1bits.AD1IF = 0;
 }
@@ -184,20 +186,18 @@ void __ISR(_TIMER_1_VECTOR, IPL4SOFT) nextOutput(void) {
     uint8_t i;
     // set old LED to dark in uart_map
     for(i=0;i<11;++i){
-        uart_map[pos+i] = &(uart_off_msg[i]); 
+        uart_map[active_LED*11+i] = &(uart_off_msg[i]); 
     }
     // step direction for running lights
-    pos += dir;
+    active_LED += running_light_direction;
     // check if pos is out of boundaries
-    if(pos>=LEDS){  pos = 0;}
-    else if(pos<0){ pos = LEDS-1;}
+    if(active_LED>=LEDS){  active_LED = 0;}
+    else if(active_LED<0){ active_LED = LEDS-1;}
     
     // set new LED to color in uart_map
     for(i=0;i<11;++i){
-        uart_map[pos+i] = &(uart_rainbow_msg[pos][i]); 
+        uart_map[active_LED*11+i] = &(uart_rainbow_msg[active_LED][i]); 
     }
-  
-    t=0;
   
     uart_msg_ptr    = FIRST_UART_MAP_ELEMENT_ADDRESS; // set uart_msg pointer to first uart message
     IFS0bits.T1IF   = 0; // reset interrupt flag
@@ -210,20 +210,21 @@ void __ISR(_UART1_TX_VECTOR, IPL5SRS) display(){
     * - filling new uart message in to fifo buffer
     */
     
-    /*
+    
     asm volatile( 
     ".set at                \n\t"
     // transfer uart message to fifo buffer    
-    // U1TXREG = *uart_msg;
-    "lhu $t0, 0(%0)         \n\t" // load next uart message
+    // U1TXREG = **uart_msg_ptr;
+    "lw $t0, 0(%0)         \n\t" // load address of next uart message
+    "lhu $t0, 0($t0)        \n\t" // load next uart message
     "sh $t0, U1TXREG        \n\t" // store message in fifo buffer
     
-    // increment uart_pos to get next uart_message by next loop 
-    "addiu %0 , %0, 2       \n\t" // increment by 2 because of 16-bit
+    // increment uart_msg_ptr to get next uart_message by next loop 
+    "addiu %0 , %0, 4       \n\t" // increment by 4 because address ar 4-byte long
     
     // disenable interrupt if updae finished
     // IEC1bits.U1TXIE = (bool)(uart_msg <= LAST_UART_MSG);
-    "sle $t0, %0, %1        \n\t" // compare uart_msg <= LAST_UART_MAP_ELEMENT_ADDRESS
+    "sle $t0, %0, %1        \n\t" // compare uart_msg_ptr <= LAST_UART_MAP_ELEMENT_ADDRESS
     // sle rd, rs, rt -> rd = rs <= rt
     "lw  $t1, IEC1          \n\t" // load IEC1
     "ins $t1, $t0, 22, 1    \n\t" // insert interrupt enable status
@@ -236,15 +237,9 @@ void __ISR(_UART1_TX_VECTOR, IPL5SRS) display(){
     "sw  $t0, IFS1          \n\t" // write back to memory with flag cleared
     
     ".set noat              \n\t"
-    : "+r" (uart_msg)       
+    : "+r" (uart_msg_ptr)       
     : "r"  (LAST_UART_MAP_ELEMENT_ADDRESS)
     :);
-    */
-    //test[t] = **uart_msg_ptr;
-    //uart_msg_ptr++;
-    //t++;
-    //o = ( uart_msg_ptr <= (LAST_UART_MAP_ELEMENT_ADDRESS));
-    IFS1bits.U1TXIF = 0;
     
 }
 void loop() {
@@ -252,13 +247,9 @@ void loop() {
     create_rainbow(); 
     // start LED running light
     IFS0bits.T1IF   = 0;    // clear timer interrupt flag
-    //T1CONbits.ON    = 1;    // start timer
+    T1CONbits.ON    = 1;    // start timer
     // main loop
-    while(1) {
-        if(o){
-            display();
-        }
-    }
+    while(1) {}
 }
 int main(void) {
     setup();
