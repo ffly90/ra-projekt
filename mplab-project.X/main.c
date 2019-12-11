@@ -19,7 +19,6 @@
 
 
 
-
 // precalculat arrays
 RgbColor        rgbw_dark={0};              // GRBW values for LED off
 RgbColor        rgbw_rainbow[LEDS];         // GRBW values for rainbow
@@ -32,12 +31,12 @@ int8_t          running_light_direction = 1;    // init direction
 int8_t          active_LED =0;                  // current active LED
 
 // variables to map between rainbow color uart messages and current active LED
-uint16_t        *uart_map[LEDS*11];             // pointer array for easy access to next uart message
-#define         FIRST_UART_MAP_ELEMENT_ADDRESS  &uart_map[0]
+uint16_t        uart_buffer[LEDS*11];             // pointer array for easy access to next uart message
+#define         UART_BUFFER_FIRST_ELEMENT_ADDRESS  &uart_buffer[0]
                                                 // address of first element in uart_map
-#define         LAST_UART_MAP_ELEMENT_ADDRESS   &uart_map[LEDS*11 - 1]
+#define         UART_BUFFER_LAST_ELEMENT_ADDRESS   &uart_buffer[LEDS*11 - 1]
                                                 // address of last  element in uart_map
-uint16_t**      uart_msg_ptr = FIRST_UART_MAP_ELEMENT_ADDRESS;// #UART message
+uint16_t*       uart_msg_ptr = UART_BUFFER_FIRST_ELEMENT_ADDRESS;// #UART message
 
 // avariable for adc
 uint8_t         adc_freq_divider = 0;           // to only use every 10th sampeling
@@ -151,8 +150,7 @@ void create_rainbow(){
         rgbw_to_uart(rgbw_rainbow[i], uart_rainbow_msg[i]);
         // init uart_map for each LED with dark
         for(j=0;j<11;++j){
-            uart_rainbow_msg[i][j]= i*1000+j;
-            uart_map[i*11+j] = &(uart_off_msg[j]);
+            uart_buffer[i*11+j] = uart_off_msg[j];
         }
     }
 }
@@ -173,7 +171,7 @@ void __ISR(_ADC_VECTOR, IPL3AUTO) ADCHandler(void){
     */
     adc_freq_divider++;
     if(adc_freq_divider == 10){
-        PR1 = 938+(938*99*ADC1BUF0/4095); // max freq for new led 100Hz , min freq 1Hz
+        PR1 = 938+(938*49*ADC1BUF0/4095); // max freq for new led 100Hz , min freq 2Hz
         adc_freq_divider = 0;
     }
     IFS1bits.AD1IF = 0;
@@ -187,7 +185,7 @@ void __ISR(_TIMER_1_VECTOR, IPL4SOFT) nextOutput(void) {
     uint8_t i;
     // set old LED to dark in uart_map
     for(i=0;i<11;++i){
-        uart_map[active_LED*11+i] = &(uart_off_msg[i]); 
+        uart_buffer[active_LED*11+i] = uart_off_msg[i]; 
     }
     // step direction for running lights
     active_LED += running_light_direction;
@@ -197,10 +195,10 @@ void __ISR(_TIMER_1_VECTOR, IPL4SOFT) nextOutput(void) {
     
     // set new LED to color in uart_map
     for(i=0;i<11;++i){
-        uart_map[active_LED*11+i] = &(uart_rainbow_msg[active_LED][i]); 
+        uart_buffer[active_LED*11+i] = uart_rainbow_msg[active_LED][i]; 
     }
   
-    uart_msg_ptr    = FIRST_UART_MAP_ELEMENT_ADDRESS; // set uart_msg pointer to first uart message
+    uart_msg_ptr    = UART_BUFFER_FIRST_ELEMENT_ADDRESS; // set uart_msg pointer to first uart message
     IFS0bits.T1IF   = 0; // reset interrupt flag
     IEC1bits.U1TXIE = 1; // enable Interrupt
 }
@@ -211,17 +209,15 @@ void __ISR(_UART1_TX_VECTOR, IPL5SRS) display(){
     * - filling new uart message in to fifo buffer
     */
     
-    
     asm volatile( 
     ".set at                \n\t"
     // transfer uart message to fifo buffer    
-    // U1TXREG = **uart_msg_ptr;
-    "lw $t0, 0(%0)         \n\t" // load address of next uart message
-    "lhu $t0, 0($t0)        \n\t" // load next uart message
+    // U1TXREG = *uart_msg_ptr;
+    "lhu $t0, 0(%0)         \n\t" // load next uart message
     "sh $t0, U1TXREG        \n\t" // store message in fifo buffer
     
     // increment uart_msg_ptr to get next uart_message by next loop 
-    "addiu %0 , %0, 4       \n\t" // increment by 4 because address ar 4-byte long
+    "addiu %0 , %0, 2       \n\t" // increment by 2 because uart_msg only 2-byte long
     
     // disenable interrupt if updae finished
     // IEC1bits.U1TXIE = (bool)(uart_msg <= LAST_UART_MSG);
@@ -239,9 +235,8 @@ void __ISR(_UART1_TX_VECTOR, IPL5SRS) display(){
     
     ".set noat              \n\t"
     : "+r" (uart_msg_ptr)       
-    : "r"  (LAST_UART_MAP_ELEMENT_ADDRESS)
+    : "r"  (UART_BUFFER_LAST_ELEMENT_ADDRESS)
     :);
-    
 }
 void loop() {
     // create uart muster
