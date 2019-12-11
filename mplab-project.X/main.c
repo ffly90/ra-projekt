@@ -197,7 +197,12 @@ void __ISR(_UART1_TX_VECTOR, IPL5SRS) display(){
     * - filling new uart message in to fifo buffer
     */
     
-    U1TXREG = *uart_msg;    // transfer uart message to fifo buffer
+       
+    asm volatile( // U1TXREG = *uart_msg;    // transfer uart message to fifo buffer
+    ".set at            \n\t"
+    "sh %0, U1TXREG     \n\t" // store 
+    ".set noat          \n\t"
+    : "+r" (*uart_msg) ::);
        
     // increment uart_pos to get next uart_message by next loop
     uart_msg++;
