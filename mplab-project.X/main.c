@@ -15,13 +15,14 @@
 #include <sys/attribs.h>
 #include <xc.h>
 #include "color.h"
+#include "HW.h"
 
-#define LEDS 3 // Number of LEDs
+
 
 
 // precalculat arrays
-uint8_t         rgbw_dark[]={0,0,0,0};      // GRBW values for LED off
-uint8_t         rgbw_rainbow[LEDS][4];      // GRBW values for rainbow
+RgbColor        rgbw_dark={0};              // GRBW values for LED off
+RgbColor        rgbw_rainbow[LEDS];         // GRBW values for rainbow
 uint16_t        uart_rainbow_msg[LEDS][11]; // UART values for each LED
 uint16_t        uart_off_msg[11];           // UART values for LED off
 

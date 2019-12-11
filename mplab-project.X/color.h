@@ -1,4 +1,10 @@
-// FROM: https://stackoverflow.com/questions/3018313/algorithm-to-convert-rgb-to-hsv-and-hsv-to-rgb-in-range-0-255-for-both
+/*
+ * FROM:    STACKOVERFLOW
+ * AT:      11. DEC 2019
+ * BY USER: Leszek Szary
+ *          https://stackoverflow.com/users/2102779/leszek-szary
+ * LINK:    https://stackoverflow.com/questions/3018313/algorithm-to-convert-rgb-to-hsv-and-hsv-to-rgb-in-range-0-255-for-both/14733008#14733008
+*/
 typedef struct 
 {
     unsigned char r;
@@ -15,4 +21,3 @@ typedef struct
 } HsvColor;
 
 RgbColor HsvToRgb(HsvColor hsv);
-HsvColor RgbToHsv(RgbColor rgb);
