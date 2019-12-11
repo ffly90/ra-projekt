@@ -197,16 +197,21 @@ void __ISR(_UART1_TX_VECTOR, IPL5SRS) display(){
     * - filling new uart message in to fifo buffer
     */
     
-       
-    asm volatile( // U1TXREG = *uart_msg;    // transfer uart message to fifo buffer
+    // transfer uart message to fifo buffer
+    asm volatile( // U1TXREG = *uart_msg;
     ".set at            \n\t"
     "sh %0, U1TXREG     \n\t" // store 
     ".set noat          \n\t"
     : "+r" (*uart_msg) ::);
        
-    // increment uart_pos to get next uart_message by next loop
-    uart_msg++;
-    if(uart_msg >= LAST_UART_MSG){ // end uart transmision
+    // increment uart_pos to get next uart_message by next loop 
+    asm volatile( // uart_msg++;
+    ".set at            \n\t"
+    "addiu %0 , %0, 2 \n\t" // increment by 2 because of 16-bit 
+    ".set noat          \n\t" 
+    : "+r" (uart_msg) ::);
+    
+    if(uart_msg > LAST_UART_MSG){ // end uart transmision
         IEC1bits.U1TXIE = 0; // disable Interrupt
     }
     
