@@ -15,9 +15,8 @@
 #include <sys/attribs.h>
 #include <xc.h>
 #include "color.h"
-#include "HW.h"
 
-
+#define LEDS 4
 
 // precalculat arrays
 RgbColor        rgbw_dark={0};              // GRBW values for LED off
@@ -31,7 +30,7 @@ int8_t          running_light_direction = 1;    // init direction
 int8_t          active_LED =0;                  // current active LED
 
 // variables to map between rainbow color uart messages and current active LED
-uint16_t        uart_buffer[LEDS*11];             // pointer array for easy access to next uart message
+uint16_t        uart_buffer[LEDS*11];
 #define         UART_BUFFER_FIRST_ELEMENT_ADDRESS  &uart_buffer[0]
                                                 // address of first element in uart_map
 #define         UART_BUFFER_LAST_ELEMENT_ADDRESS   &uart_buffer[LEDS*11 - 1]
@@ -41,24 +40,7 @@ uint16_t*       uart_msg_ptr = UART_BUFFER_FIRST_ELEMENT_ADDRESS;// #UART messag
 // avariable for adc
 uint8_t         adc_freq_divider = 0;           // to only use every 10th sampeling
 
-
-void setup() { 
-	SYSTEM_Initialize();   //set 24 MHz clock for CPU and Peripheral Bus
-                           //clock period = 41,667 ns = 0,0417 us
-    
-    //Zaehler Konfiguration
-    T1CONbits.TGATE     = 0;
-    T1CONbits.TCS       = 0;
-    T1CONbits.TCKPS     = 0b11;
-    T1CONbits.TSYNC     = 0;
-    PR1                 = 938; // overflow interrupt and auto reset at 3225 -> 10ms
-    //Timer Interrupt
-    IEC0bits.T1IE       = 1;
-    IPC4bits.T1IP       = 4;
-    
-    
-    // UART CONFIGURATION
-    
+void setupUART(void){
     // Set U1MODE Register
     U1MODEbits.BRGH = 1; // 4x baud clock enabled
     U1BRG = 1; // Set Counter to 1
@@ -77,7 +59,19 @@ void setup() {
     
     // OUTPUT PIN CONFIGURATION
     TRISCbits.TRISC12   = 0;    // set RC12 as output for UART1 TX
-    
+}
+void setupTIMER(void){    
+    //TIMER Konfiguration
+    T1CONbits.TGATE     = 0;
+    T1CONbits.TCS       = 0;
+    T1CONbits.TCKPS     = 0b11;
+    T1CONbits.TSYNC     = 0;
+    PR1                 = 938; // overflow interrupt and auto reset at 3225 -> 10ms
+    //Timer Interrupt
+    IEC0bits.T1IE       = 1;
+    IPC4bits.T1IP       = 4;    
+}
+void setupEXTIQ(void){
     // pin B9 Interrupt
     // INT2I: External 2
     TRISBbits.TRISB9    = 1;    // set input RB9 or button S1
@@ -88,7 +82,8 @@ void setup() {
     
     INTCONbits.INT2EP   = 0;    // clear interrupt at falling edge bit
     IEC0bits.INT2IE     = 1;    // enable external interrupt 2
-    
+}
+void setupADC(void){
     // RC8 (AN14) is Potentiometer input
     ANSELCbits.ANSC8 = 1;   // RC8 input
     TRISCbits.TRISC8 = 1;
@@ -104,15 +99,26 @@ void setup() {
     IEC1bits.AD1IE = 1;     // ADC interrupt enable
     IPC8bits.AD1IP = 3;     // ADC priority 4
     IPC8bits.AD1IS = 1;
-    
 }
-void rgbw_to_uart(uint8_t in[], uint16_t out[]){// in =  u8 g, u8 r, u8 b, u8 w
-    int i,j;
+void setup() { 
+	SYSTEM_Initialize();   //set 24 MHz clock for CPU and Peripheral Bus
+    setupEXTIQ();
+    setupTIMER();
+    setupADC();
+    setupUART();   
+}
+
+void rgbw_to_uart(RgbColor in, uint16_t out[]){// in =  u8 g, u8 r, u8 b, u8 w
+    int i,j;    
+    uint8_t rgbw_array[4];
+    rgbw_array[0] = in.g;
+    rgbw_array[1] = in.r;
+    rgbw_array[2] = in.g;
+    rgbw_array[3] = in.w;
     bool temp[8];
     bool bits[32];//= {r,g,b,w}; bits in order nessesarc for LED
-    
     // transfer rgbw values to one 32-Bit array 
-    // r[7] -> bits[0]
+    // g[7] -> bits[0]
     // w[0] -> bits[31]
     for(i=0;i<4;i++){
         for(j = 0; j<8; j++){ temp[7-j] = in[i] & 1<<j; }
@@ -141,11 +147,7 @@ void create_rainbow(){
     // create rgbw values
     for(i=0;i<LEDS;i++){
         HsvColor hsv = {.h = 255*i/(LEDS-1), .s = 255, .v = 32};
-        RgbColor rgb = HsvToRgb(hsv);
-        rgbw_rainbow[i][0] = rgb.g;
-        rgbw_rainbow[i][1] = rgb.r;
-        rgbw_rainbow[i][2] = rgb.b;
-        rgbw_rainbow[i][3] = rgb.w;
+        rgbw_rainbow[i] = HsvToRgb(hsv);
         // convert rgbw values to uart messages
         rgbw_to_uart(rgbw_rainbow[i], uart_rainbow_msg[i]);
         // init uart_map for each LED with dark
@@ -176,7 +178,8 @@ void __ISR(_ADC_VECTOR, IPL3AUTO) ADCHandler(void){
     }
     IFS1bits.AD1IF = 0;
 }
-void __ISR(_TIMER_1_VECTOR, IPL4SOFT) nextOutput(void) {
+// void __ISR(_TIMER_1_VECTOR, IPL4SOFT) 
+void setNextLEDactive(void) {
     /*
     * timer interrupt
     * - occurs on timer auto reset
@@ -202,7 +205,8 @@ void __ISR(_TIMER_1_VECTOR, IPL4SOFT) nextOutput(void) {
     IFS0bits.T1IF   = 0; // reset interrupt flag
     IEC1bits.U1TXIE = 1; // enable Interrupt
 }
-void __ISR(_UART1_TX_VECTOR, IPL5SRS) display(){
+// void __ISR(_UART1_TX_VECTOR, IPL5SRS)
+void display(){
     /*
     * uart tx interrupt --
     * - occurs it there is empty space in uart tx fifo buffer
@@ -238,6 +242,9 @@ void __ISR(_UART1_TX_VECTOR, IPL5SRS) display(){
     : "r"  (UART_BUFFER_LAST_ELEMENT_ADDRESS)
     :);
 }
+
+
+
 void loop() {
     // create uart muster
     create_rainbow(); 
