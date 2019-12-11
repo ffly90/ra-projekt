@@ -1,0 +1,21 @@
+@startuml
+hide empty description
+Title Hauptprogramm
+state "setup" as s
+s : SYSTEM_Initialize
+s : Timerkonfiguration
+s : UARTkonfiguration
+s : Pinkonfiguration
+s : ADCkonfiguration 
+[*] -right-> s
+state "vor Entlosschleife" as bl{
+bl : erstelle Regenbogen RGB-Farben
+bl : RGB-Farben zu UART-Botschaften
+bl : starte Timer
+}
+s -right-> bl
+state "Entlosschleife" as l
+l : leer
+bl -right-> l
+l --> l
+@endumls

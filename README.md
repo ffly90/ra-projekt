@@ -1,6 +1,10 @@
 # Laborprojekt Rechnerarchitektur 2 - LED-Ansteuerung über UART von Steffen Walter und Johannes Staib
 
-
+## SW
+### Hauptprogramm
+![](out/sw/Hauptprogramm.png)
+### Interrupts
+![](out/ir/Interrupts.png)
 <!--
 
 
