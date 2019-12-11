@@ -20,18 +20,18 @@
 
 
 // precalculat arrays
-uint8_t         dark[]={0,0,0,0};           // GRBW values for LED off
-uint8_t         rainbow_color[LEDS][4];     // GRBW values for rainbow
-uint16_t        uart_rainbow[LEDS][11];     // UART values for each LED
-uint16_t        uart_off[11];               // UART values for LED off
+uint8_t         rgbw_dark[]={0,0,0,0};      // GRBW values for LED off
+uint8_t         rgbw_rainbow[LEDS][4];      // GRBW values for rainbow
+uint16_t        uart_rainbow_msg[LEDS][11]; // UART values for each LED
+uint16_t        uart_off_msg[11];           // UART values for LED off
 uint16_t        *uart_map[LEDS*11]  __attribute__((aligned(16)));
 
 // running light values
 int8_t          dir = 1;                    // init direction
 int8_t          pos=0;                      // current active LED
 uint16_t        *uart_msg;                  // #UART message
-#define         FIRST_UART_MSG  (uint16_t*)uart_map
-#define         LAST_UART_MSG   (uint16_t*)(FIRST_UART_MSG + LEDS*11 - 1)
+#define         FIRST_UART_MSG  (uint16_t*)(&(uart_map[0]))             // address of first element in uart_map
+#define         LAST_UART_MSG   (uint16_t*)(&(uart_map[LEDS*11 - 1]))   // address of last  element in uart_map
 uint8_t         adc_offset = 0;             // adc sample offset
 
 
@@ -125,22 +125,23 @@ void rgbw_to_uart(uint8_t in[], uint16_t out[]){// in =  u8 g, u8 r, u8 b, u8 w
 }
 void create_rainbow(){
     int i, j;
+    // create uart message for LED off
+    rgbw_to_uart(rgbw_dark, uart_off_msg); 
     // create rgbw values
     for(i=0;i<LEDS;i++){
         HsvColor hsv = {.h = 255*i/(LEDS-1), .s = 255, .v = 32};
         RgbColor rgb = HsvToRgb(hsv);
-        rainbow_color[i][0] = rgb.g;
-        rainbow_color[i][1] = rgb.r;
-        rainbow_color[i][2] = rgb.b;
-        rainbow_color[i][3] = rgb.w;
+        rgbw_rainbow[i][0] = rgb.g;
+        rgbw_rainbow[i][1] = rgb.r;
+        rgbw_rainbow[i][2] = rgb.b;
+        rgbw_rainbow[i][3] = rgb.w;
+        // convert rgbw values to uart messages
+        rgbw_to_uart(rgbw_rainbow[i], uart_rainbow_msg[i]);
+        // init uart_map for each LED with dark
+        for(j=0;j<11;++j){
+            uart_map[i*11+j] = &(uart_off_msg[j]);
+        }
     }
-    // convert rgbw values to uart messages
-    for(i=0; i<LEDS; i++){
-        rgbw_to_uart(rainbow_color[i], uart_rainbow[i]);
-    } // rgb to uart messages
-    rgbw_to_uart(dark, uart_off); // create uart message for LED off
-    
-    // fill uart
 }
 void __ISR(_EXTERNAL_2_VECTOR, IPL2SOFT) buttonInterrupt(void){
     /*
@@ -173,7 +174,7 @@ void __ISR(_TIMER_1_VECTOR, IPL4SOFT) nextOutput(void) {
     uint8_t i;
     // set old LED to dark in uart_map
     for(i=0;i<11;++i){
-        uart_map[pos+i] = &(uart_off[i]); 
+        uart_map[pos+i] = &(uart_off_msg[i]); 
     }
     // step direction for running lights
     pos += dir;
@@ -183,7 +184,7 @@ void __ISR(_TIMER_1_VECTOR, IPL4SOFT) nextOutput(void) {
     
     // set new LED to color in uart_map
     for(i=0;i<11;++i){
-        uart_map[pos+i] = &(uart_rainbow[pos][i]); 
+        uart_map[pos+i] = &(uart_rainbow_msg[pos][i]); 
     }
   
     uart_msg = FIRST_UART_MSG; // set uart_msg pointer to first uart message
