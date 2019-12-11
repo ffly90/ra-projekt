@@ -197,41 +197,35 @@ void __ISR(_UART1_TX_VECTOR, IPL5SRS) display(){
     * - filling new uart message in to fifo buffer
     */
     
-    // transfer uart message to fifo buffer
-    asm volatile( // U1TXREG = *uart_msg;
-    ".set at            \n\t"
-    "sh %0, U1TXREG     \n\t" // store 
-    ".set noat          \n\t"
-    : "+r" (*uart_msg) ::);
-       
-    // increment uart_pos to get next uart_message by next loop 
-    asm volatile( // uart_msg++;
-    ".set at            \n\t"
-    "addiu %0 , %0, 2 \n\t" // increment by 2 because of 16-bit 
-    ".set noat          \n\t" 
-    : "+r" (uart_msg) ::);
     
-    // disable Interrupt
-    asm volatile( // IEC1bits.U1TXIE = (bool)(uart_msg <= LAST_UART_MSG);
-    ".set at            \n\t"
-    "sle $t0, %0, %1    \n\t" // compare uart_msg <= LAST_UART_MSG
-    "lw  $t1, IEC1      \n\t" // load IEC1
-    "ins $t1, $t0, 22, 1\n\t" // insert interrupt enable status
-    "sw  $t1, IEC1      \n\t" // store IEC1
-    ".set noat          \n\t"
-    : "+r" (uart_msg)
-    : "r"  (LAST_UART_MSG):);
-       
-     
+    asm volatile( 
+    ".set at                \n\t"
+    // transfer uart message to fifo buffer    
+    // U1TXREG = *uart_msg;
+    "lhu $t0, 0(%0)         \n\t" // load next uart message
+    "sh $t0, U1TXREG        \n\t" // store message in fifo buffer
+    
+    // increment uart_pos to get next uart_message by next loop 
+    "addiu %0 , %0, 2       \n\t" // increment by 2 because of 16-bit
+    
+    // disenable interrupt if updae finished
+    // IEC1bits.U1TXIE = (bool)(uart_msg <= LAST_UART_MSG);
+    "sle $t0, %0, %1        \n\t" // compare uart_msg <= LAST_UART_MSG
+    /* sle rd, rs, rt -> rd = rs <= rt */
+    "lw  $t1, IEC1          \n\t" // load IEC1
+    "ins $t1, $t0, 22, 1    \n\t" // insert interrupt enable status
+    "sw  $t1, IEC1          \n\t" // store IEC1
     
     // clear interrupt flag
-    asm volatile( // IFS1bits.U1TXIF = 0;
-    ".set at                \n\t"
+    // IFS1bits.U1TXIF = 0;
     "lw  $t0, IFS1          \n\t" // load IFS1 from memory
     "ins $t0, $zero, 22, 1  \n\t" // clear interrupt flag bit
     "sw  $t0, IFS1          \n\t" // write back to memory with flag cleared
+    
     ".set noat              \n\t"
-    :::);
+    : "+r" (uart_msg)       
+    : "r"  (LAST_UART_MSG)
+    :);
     
 }
 void loop() {
