@@ -16,25 +16,30 @@
 #include <xc.h>
 #include "color.h"
 
-typedef char u8;
 #define LEDS 24 // Number of LEDs
 
-unsigned char dark[]={0,0,0,0};          // GRBW values for LED off
-unsigned char rainbow_color[LEDS][4];    // GRBW values for rainbow
-int uart_rainbow[LEDS][11];     // UART values for each LED
-int uart_off[11];               // UART values for LED off
-char dir = 1;                   // init direction
-char pos=0;                     // current active LED
-int uart_pos = 0;               // #UART message
-unsigned char adc_offset = 0;   // adc sample offset
 
-int buffer[LEDS][LEDS];
+// precalculat arrays
+uint8_t         dark[]={0,0,0,0};           // GRBW values for LED off
+uint8_t         rainbow_color[LEDS][4];     // GRBW values for rainbow
+uint16_t        uart_rainbow[LEDS][11];     // UART values for each LED
+uint16_t        uart_off[11];               // UART values for LED off
+uint16_t        *uart_map[LEDS*11]  __attribute__((aligned(16)));
+
+// running light values
+int8_t          dir = 1;                    // init direction
+int8_t          pos=0;                      // current active LED
+uint16_t        *uart_msg;                  // #UART message
+#define         FIRST_UART_MSG  (uint16_t*)uart_map
+#define         LAST_UART_MSG   (uint16_t*)(FIRST_UART_MSG + LEDS*11 - 1)
+uint8_t         adc_offset = 0;             // adc sample offset
+
 
 void setup() { 
 	SYSTEM_Initialize();   //set 24 MHz clock for CPU and Peripheral Bus
                            //clock period = 41,667 ns = 0,0417 us
     
-    //Z�hler Konfiguration
+    //Zaehler Konfiguration
     T1CONbits.TGATE     = 0;
     T1CONbits.TCS       = 0;
     T1CONbits.TCKPS     = 0b11;
@@ -93,43 +98,7 @@ void setup() {
     IPC8bits.AD1IP = 3;     // ADC priority 4
     IPC8bits.AD1IS = 1;
 }
-
-void __ISR(_EXTERNAL_2_VECTOR, IPL2SOFT) buttonInterrupt(void){
-    /*
-    * pin falling edge interrupt
-    * - occur if button s1 is pressed
-    * - changing running light direction
-    */
-    dir = -1* dir;          // change running light direction
-    IFS0bits.INT2IF = 0;    // clear interrupt flag
-}
-
-void __ISR(_ADC_VECTOR, IPL3AUTO) ADCHandler(void){
-    /*
-    * adc measuring finished interrupt
-    * - occurs if the autosampeling finished a conversion
-    * - update the timer auto reset value
-    */
-    adc_offset++;
-    if(adc_offset == 10){
-        PR1 = 938+(938*99*ADC1BUF0/4095); // max freq for new led 100Hz , min freq 1Hz
-        adc_offset = 0;
-    }
-    IFS1bits.AD1IF = 0;
-}
-void create_rainbow(){
-    int i, j;
-    for(i=0;i<LEDS;i++){
-        HsvColor hsv = {.h = 255*i/(LEDS-1), .s = 255, .v = 32};
-        RgbColor rgb = HsvToRgb(hsv);
-        rainbow_color[i][0] = rgb.g;
-        rainbow_color[i][1] = rgb.r;
-        rainbow_color[i][2] = rgb.b;
-        rainbow_color[i][3] = rgb.w;
-    }
-}
-
-void rgbw_to_uart(unsigned char in[], int out[]){// in =  u8 g, u8 r, u8 b, u8 w
+void rgbw_to_uart(uint8_t in[], uint16_t out[]){// in =  u8 g, u8 r, u8 b, u8 w
     int i,j;
     bool temp[8];
     bool bits[32];//= {r,g,b,w}; bits in order nessesarc for LED
@@ -154,234 +123,107 @@ void rgbw_to_uart(unsigned char in[], int out[]){// in =  u8 g, u8 r, u8 b, u8 w
         out[i]=~uart_val; // convert from positiv to negativ logic
     }
 }
-
+void create_rainbow(){
+    int i, j;
+    // create rgbw values
+    for(i=0;i<LEDS;i++){
+        HsvColor hsv = {.h = 255*i/(LEDS-1), .s = 255, .v = 32};
+        RgbColor rgb = HsvToRgb(hsv);
+        rainbow_color[i][0] = rgb.g;
+        rainbow_color[i][1] = rgb.r;
+        rainbow_color[i][2] = rgb.b;
+        rainbow_color[i][3] = rgb.w;
+    }
+    // convert rgbw values to uart messages
+    for(i=0; i<LEDS; i++){
+        rgbw_to_uart(rainbow_color[i], uart_rainbow[i]);
+    } // rgb to uart messages
+    rgbw_to_uart(dark, uart_off); // create uart message for LED off
+    
+    // fill uart
+}
+void __ISR(_EXTERNAL_2_VECTOR, IPL2SOFT) buttonInterrupt(void){
+    /*
+    * pin falling edge interrupt
+    * - occur if button s1 is pressed
+    * - changing running light direction
+    */
+    dir = -1* dir;          // change running light direction
+    IFS0bits.INT2IF = 0;    // clear interrupt flag
+}
+void __ISR(_ADC_VECTOR, IPL3AUTO) ADCHandler(void){
+    /*
+    * adc measuring finished interrupt
+    * - occurs if the autosampeling finished a conversion
+    * - update the timer auto reset value
+    */
+    adc_offset++;
+    if(adc_offset == 10){
+        PR1 = 938+(938*99*ADC1BUF0/4095); // max freq for new led 100Hz , min freq 1Hz
+        adc_offset = 0;
+    }
+    IFS1bits.AD1IF = 0;
+}
 void __ISR(_TIMER_1_VECTOR, IPL4SOFT) nextOutput(void) {
     /*
     * timer interrupt
     * - occurs on timer auto reset
     * - the auto reset value is depending from adc value
     */
-
+    uint8_t i;
+    // set old LED to dark in uart_map
+    for(i=0;i<11;++i){
+        uart_map[pos+i] = &(uart_off[i]); 
+    }
     // step direction for running lights
     pos += dir;
-    // check if 
+    // check if pos is out of boundaries
     if(pos>=LEDS){  pos = 0;}
     else if(pos<0){ pos = LEDS-1;}
+    
+    // set new LED to color in uart_map
+    for(i=0;i<11;++i){
+        uart_map[pos+i] = &(uart_rainbow[pos][i]); 
+    }
+  
+    uart_msg = FIRST_UART_MSG; // set uart_msg pointer to first uart message
     IFS0bits.T1IF = 0; // reset interrupt flag
     IEC1bits.U1TXIE = 1; // enable Interrupt
 }
-
-
 void __ISR(_UART1_TX_VECTOR, IPL5SRS) display(){
     /*
     * uart tx interrupt --
     * - occurs it there is empty space in uart tx fifo buffer
     * - filling new uart message in to fifo buffer
     */
-    asm volatile("nop");
-//    asm volatile(
-//    ".set at\n\t"
-//    "div $0, %[uart_pos], %[eleven]\n\t"
-//    "mflo $t0\n\t"    
-//    "mfhi $t1\n\t"
-//    "sll $t1, $t1, 2\n\t"
-//    "beq $t0, %[pos], 1f\n\t"
-//    
-//    "add $t0, $t1, %[uart_off]\n\t"
-//    "lw $t0, 0($t0)\n\t"
-//    "sw $t0, U1TXREG\n\t"
-//    "b 2f\n\t"
-//    "nop\n\t"
-//    
-//        "1:"
-//    "sll $t2, %[pos], 2\n\t"
-//    "mul $t2, $t2, %[eleven]\n\t"
-//    "add $t2, $t2, %[uart_rainbow]\n\t"
-//    "add $t2, $t2, $t1\n\t"
-//    "lw $t2, 0($t2)\n\t"
-//    "sw $t2, U1TXREG\n\t"
-//    "b 2f\n\t"
-//    "nop\n\t"
-//    "2:"
-//    "nop\n\t"
-//    :
-//    :[uart_rainbow] "r" (uart_rainbow), [pos] "r" (pos), [eleven] "r" (11), [uart_pos] "r" (uart_pos), [uart_off] "r" (uart_off)
-//    :"t0", "t1", "t2"
-//    );
     
-//    asm volatile
-//    (
-//    ".set at\n\t"
-//      "divu $0, %[uart_pos], %[eleven]\n\t"
-//      "mflo $t0\n\t"
-//      "beq $t0, %[pos], 1f\n\t"
-//      "nop\n\t"
-//      "bne $t0, %[pos], 2f\n\t"
-//      "nop\n\t"
-//      "1:"
-//      "sll $t0, %[pos], 2\n\t"
-//    "mul $t0, $t0, %[eleven]\n\t"
-//    "divu $0, %[uart_pos], %[eleven]\n\t"
-//    "mfhi $t1\n\t"
-//    "sll $t1, $t1, 2\n\t"
-//    "add $t0, $t0, %[uart_rainbow]\n\t"
-//    "add $t0, $t0, $t1\n\t"
-//    "lw $t0, 0($t0)\n\t"
-//    "sw $t0, U1TXREG\n\t"
-//    "b 3f\n\t"
-//    "nop\n\t"
-//    "2:"
-//    "divu $0, %[uart_pos], %[eleven]\n\t"
-//        "mfhi $t1\n\t"
-//        "sll $t1, $t1, 2\n\t"
-//        "add $t1, $t1, %[uart_off]\n\t"
-//        "lw $t1, 0($t1)\n\t"
-//        "sw $t1, U1TXREG\n\t"
-//    "3:"
-//    "nop\n\t"
-//    :
-//    :[pos] "r" (pos), [eleven] "r" (11), [uart_pos] "r" (uart_pos), [uart_rainbow] "r" (uart_rainbow), [uart_off] "r" (uart_off)
-//    :
-//    );
-    
-    asm volatile("nop\n\t");
-    asm volatile(
-        ".set at\n\t"
-        "sll $t0, %[pos], 2\n\t"
-        "mul $t0, $t0, %[eleven]\n\t"
-        "divu $0, %[uart_pos], %[eleven]\n\t"
-        "mfhi $t1\n\t"
-        "mflo $t3\n\t"
-        "beq $t3, %[pos], if \n\t"
-        
-        "sll $t2, $t1, 2\n\t"
-        "add $t1, $t2, %[uart_off]\n\t"
-        "lw $t1, 0($t1)\n\t"
-        "sw $t1, U1TXREG\n\t"
-        "j endif\n\t"
-        
-        "if:"
-        "sll $t2, $t1, 2\n\t"
-        "add $t0, $t0, %[uart_rainbow]\n\t"
-        "add $t0, $t0, $t2\n\t"
-        "lw $t0, 0($t0)\n\t"
-        "sw $t0, U1TXREG\n\t"
-
-        "endif:"
-        :
-        : [uart_rainbow] "r" (uart_rainbow), [pos] "r" (pos), [eleven] "r" (11), [uart_pos] "r" (uart_pos), [uart_off] "r" (uart_off)
-        : "t0", "t1", "t2", "t3"
-    );
-
-    
-//        if (pos == (uart_pos / 11))
-//    {
-//        //U1TXREG = uart_rainbow[pos][uart_pos % 11 ];
-//        
-//        asm volatile(
-//        ".set at\n\t"
-//        "sll $t0, %[pos], 2\n\t"
-//        "mul $t0, $t0, %[eleven]\n\t"
-//        "divu $0, %[uart_pos], %[eleven]\n\t"
-//        "mfhi $t1\n\t"
-//        "sll $t2, $t1, 2\n\t"
-//        "add $t0, $t0, %[uart_rainbow]\n\t"
-//        "add $t0, $t0, $t2\n\t"
-//        "lw $t0, 0($t0)\n\t"
-//        "sw $t0, U1TXREG"
-//        :
-//        : [uart_rainbow] "r" (uart_rainbow), [pos] "r" (pos), [eleven] "r" (11), [uart_pos] "r" (uart_pos), [uart_off] "r" (uart_off)
-//        : "t0", "t1", "t2"
-//        );
-//    }
-//    else
-//    {
-//        asm volatile(
-//        ".set at\n\t"
-//        "divu $0, %[uart_pos], %[eleven]\n\t"
-//        "mfhi $t1\n\t"
-//        "sll $t2, $t1, 2\n\t"
-//        "add $t1, $t2, %[uart_off]\n\t"
-//        "lw $t1, 0($t1)\n\t"
-//        "sw $t1, U1TXREG"
-//        :
-//        : [uart_off] "r" (uart_off), [eleven] "r" (11), [uart_pos] "r" (uart_pos)
-//        : "t1", "t2"
-//        );
-//        //U1TXREG = uart_off[uart_pos % 11];
-//    }
-    
-//    asm volatile(
-//    ".set at            \n\t"
-//    ".set noreorder     \n\t"
-//    "li $t0, 11        \n\t" // load 11 for division
-//    "divu $0, %0, $t0 \n\t" // divide uart_pos by 11
-//    "mflo $t1           \n\t" // get integer from division
-//    "mfhi $t2           \n\t" // get remainder from division
-//    "bne %3, $t1, else \n\t" // if int quotient is not same as pos 
-//    "sll $t2, $t2, 2    \n\t" // calc address offset (needs to bee executed in both cases)
-//
-//    "sll $t1, %3, 2    \n\t" // to get address offset 
-//    "mul $t1, $t1, $t0 \n\t"
-//    "addu $t1, %1, $t1 \n\t" // calc absolut address
-//    "addu $t1, $t1, $t2 \n\t" // calc absolute address
-//    "lw $t0, 0($t1)     \n\t" // load next uart message
-//    "sw $t0, U1TXREG    \n\t" // transfer message to fifo transmit buffer 
-//    "j endif            \n\t" // leave true branch
-//    "nop\n\t"
-//    
-//    "else:                  " // begin false branch
-//    "addu $t2, %2, $t2 \n\t" // calc absolute address
-//    "lw $t0, 0($t2)     \n\t" // load next uart message
-//    "sw $t0, U1TXREG    \n\t" // transfer message to fifo transmit buffer 
-//    "endif:                  " // after if
-//    : "+r" (uart_pos) 
-//    : "r" (uart_rainbow), "r" (uart_off), "r" (pos)
-//    : "t0", "t1", "t2"
-//    );
-    /* 
-    %0 := uart_pos
-    %1 := uart_rainbow
-    %2 := uart_off
-    %3 := pos
-    */
-    
-//    if(pos  == ( uart_pos / 11 )  ){// check if current uart_pos is at the activ LED
-//        U1TXREG = uart_rainbow[pos][uart_pos % 11 ]; // Write the data byte to the UART.
-//    }else{
-//        U1TXREG = uart_off[uart_pos % 11 ]; // Write the data byte to the UART.
-//    }
+    U1TXREG = *uart_msg;    // transfer uart message to fifo buffer
        
     // increment uart_pos to get next uart_message by next loop
-    uart_pos++;
-    if(uart_pos >= 11*LEDS){ // end uart transmision
-        uart_pos = 0;
+    uart_msg++;
+    if(uart_msg >= LAST_UART_MSG){ // end uart transmision
         IEC1bits.U1TXIE = 0; // disable Interrupt
     }
     
     // clear interrupt flag
-    asm volatile( // IFS1bits.U1TXIF = 0; 
+    asm volatile( // IFS1bits.U1TXIF = 0;
+    ".set at                \n\t"
     "lw  $t0, IFS1          \n\t" // load IFS1 from memory
     "ins $t0, $zero, 22, 1  \n\t" // clear interrupt flag bit
     "sw  $t0, IFS1          \n\t" // write back to memory with flag cleared
+    ".set noat              \n\t"
     :::);
     
 }
-
 void loop() {
-    int i;
     // create uart muster
-    create_rainbow(); // create rgb rainbow
-    for(i=0; i<LEDS; i++){rgbw_to_uart(rainbow_color[i], uart_rainbow[i]);} // rgb to uart messages
-    rgbw_to_uart(dark, uart_off); // create uart message for LED off
-
+    create_rainbow(); 
     // start LED running light
     IFS0bits.T1IF   = 0;    // clear timer interrupt flag
     T1CONbits.ON    = 1;    // start timer
     // main loop
     while(1) {}
 }
-
 int main(void) {
     setup();
     loop();
