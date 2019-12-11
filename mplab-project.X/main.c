@@ -16,25 +16,30 @@
 #include <xc.h>
 #include "color.h"
 
-#define LEDS 24 // Number of LEDs
+#define LEDS 3 // Number of LEDs
 
 
 // precalculat arrays
 uint8_t         rgbw_dark[]={0,0,0,0};      // GRBW values for LED off
 uint8_t         rgbw_rainbow[LEDS][4];      // GRBW values for rainbow
-uint16_t        uart_rainbow_msg[LEDS][11]; // UART values for each LED
-uint16_t        uart_off_msg[11];           // UART values for LED off
-uint16_t        *uart_map[LEDS*11]  __attribute__((aligned(16)));
+uint32_t        uart_rainbow_msg[LEDS][11]; // UART values for each LED
+uint32_t        uart_off_msg[11];           // UART values for LED off
+uint32_t        *uart_map[LEDS*11];
 
+uint32_t        test[LEDS*12];
+uint32_t        t = 0;
+bool            o = 1;
 // running light values
-int8_t          dir = 1;                    // init direction
-int8_t          pos=0;                      // current active LED
-uint16_t        *uart_msg;                  // #UART message
-#define         FIRST_UART_MSG  (uint16_t*)(&(uart_map[0]))             // address of first element in uart_map
-#define         LAST_UART_MSG   (uint16_t*)(&(uart_map[LEDS*11 - 1]))   // address of last  element in uart_map
-uint8_t         adc_offset = 0;             // adc sample offset
-
-
+int8_t          dir = 1;                        // init direction
+int8_t          pos=0;                          // current active LED
+#define         FIRST_UART_MAP_ELEMENT_ADDRESS  &uart_map[0]
+                                                // address of first element in uart_map
+#define         LAST_UART_MAP_ELEMENT_ADDRESS   &uart_map[LEDS*11 - 1]
+                                                // address of last  element in uart_map
+uint32_t**      uart_msg_ptr = FIRST_UART_MAP_ELEMENT_ADDRESS;// #UART message
+uint8_t         adc_offset = 0;                 // adc sample offset
+uint32_t        **f = FIRST_UART_MAP_ELEMENT_ADDRESS;
+uint32_t        **l = LAST_UART_MAP_ELEMENT_ADDRESS;
 void setup() { 
 	SYSTEM_Initialize();   //set 24 MHz clock for CPU and Peripheral Bus
                            //clock period = 41,667 ns = 0,0417 us
@@ -97,8 +102,9 @@ void setup() {
     IEC1bits.AD1IE = 1;     // ADC interrupt enable
     IPC8bits.AD1IP = 3;     // ADC priority 4
     IPC8bits.AD1IS = 1;
+    
 }
-void rgbw_to_uart(uint8_t in[], uint16_t out[]){// in =  u8 g, u8 r, u8 b, u8 w
+void rgbw_to_uart(uint8_t in[], uint32_t out[]){// in =  u8 g, u8 r, u8 b, u8 w
     int i,j;
     bool temp[8];
     bool bits[32];//= {r,g,b,w}; bits in order nessesarc for LED
@@ -127,6 +133,9 @@ void create_rainbow(){
     int i, j;
     // create uart message for LED off
     rgbw_to_uart(rgbw_dark, uart_off_msg); 
+    for(i=0;i<11;++i){
+        uart_off_msg[i] = 55000+i;
+    }
     // create rgbw values
     for(i=0;i<LEDS;i++){
         HsvColor hsv = {.h = 255*i/(LEDS-1), .s = 255, .v = 32};
@@ -139,6 +148,7 @@ void create_rainbow(){
         rgbw_to_uart(rgbw_rainbow[i], uart_rainbow_msg[i]);
         // init uart_map for each LED with dark
         for(j=0;j<11;++j){
+            uart_rainbow_msg[i][j]= i*1000+j;
             uart_map[i*11+j] = &(uart_off_msg[j]);
         }
     }
@@ -187,8 +197,10 @@ void __ISR(_TIMER_1_VECTOR, IPL4SOFT) nextOutput(void) {
         uart_map[pos+i] = &(uart_rainbow_msg[pos][i]); 
     }
   
-    uart_msg = FIRST_UART_MSG; // set uart_msg pointer to first uart message
-    IFS0bits.T1IF = 0; // reset interrupt flag
+    t=0;
+  
+    uart_msg_ptr    = FIRST_UART_MAP_ELEMENT_ADDRESS; // set uart_msg pointer to first uart message
+    IFS0bits.T1IF   = 0; // reset interrupt flag
     IEC1bits.U1TXIE = 1; // enable Interrupt
 }
 void __ISR(_UART1_TX_VECTOR, IPL5SRS) display(){
@@ -198,7 +210,7 @@ void __ISR(_UART1_TX_VECTOR, IPL5SRS) display(){
     * - filling new uart message in to fifo buffer
     */
     
-    
+    /*
     asm volatile( 
     ".set at                \n\t"
     // transfer uart message to fifo buffer    
@@ -211,8 +223,8 @@ void __ISR(_UART1_TX_VECTOR, IPL5SRS) display(){
     
     // disenable interrupt if updae finished
     // IEC1bits.U1TXIE = (bool)(uart_msg <= LAST_UART_MSG);
-    "sle $t0, %0, %1        \n\t" // compare uart_msg <= LAST_UART_MSG
-    /* sle rd, rs, rt -> rd = rs <= rt */
+    "sle $t0, %0, %1        \n\t" // compare uart_msg <= LAST_UART_MAP_ELEMENT_ADDRESS
+    // sle rd, rs, rt -> rd = rs <= rt
     "lw  $t1, IEC1          \n\t" // load IEC1
     "ins $t1, $t0, 22, 1    \n\t" // insert interrupt enable status
     "sw  $t1, IEC1          \n\t" // store IEC1
@@ -225,8 +237,14 @@ void __ISR(_UART1_TX_VECTOR, IPL5SRS) display(){
     
     ".set noat              \n\t"
     : "+r" (uart_msg)       
-    : "r"  (LAST_UART_MSG)
+    : "r"  (LAST_UART_MAP_ELEMENT_ADDRESS)
     :);
+    */
+    //test[t] = **uart_msg_ptr;
+    //uart_msg_ptr++;
+    //t++;
+    //o = ( uart_msg_ptr <= (LAST_UART_MAP_ELEMENT_ADDRESS));
+    IFS1bits.U1TXIF = 0;
     
 }
 void loop() {
@@ -234,9 +252,13 @@ void loop() {
     create_rainbow(); 
     // start LED running light
     IFS0bits.T1IF   = 0;    // clear timer interrupt flag
-    T1CONbits.ON    = 1;    // start timer
+    //T1CONbits.ON    = 1;    // start timer
     // main loop
-    while(1) {}
+    while(1) {
+        if(o){
+            display();
+        }
+    }
 }
 int main(void) {
     setup();
