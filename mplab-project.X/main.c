@@ -211,9 +211,18 @@ void __ISR(_UART1_TX_VECTOR, IPL5SRS) display(){
     ".set noat          \n\t" 
     : "+r" (uart_msg) ::);
     
-    if(uart_msg > LAST_UART_MSG){ // end uart transmision
-        IEC1bits.U1TXIE = 0; // disable Interrupt
-    }
+    // disable Interrupt
+    asm volatile( // IEC1bits.U1TXIE = (bool)(uart_msg <= LAST_UART_MSG);
+    ".set at            \n\t"
+    "sle $t0, %0, %1    \n\t" // compare uart_msg <= LAST_UART_MSG
+    "lw  $t1, IEC1      \n\t" // load IEC1
+    "ins $t1, $t0, 22, 1\n\t" // insert interrupt enable status
+    "sw  $t1, IEC1      \n\t" // store IEC1
+    ".set noat          \n\t"
+    : "+r" (uart_msg)
+    : "r"  (LAST_UART_MSG):);
+       
+     
     
     // clear interrupt flag
     asm volatile( // IFS1bits.U1TXIF = 0;
