@@ -351,14 +351,21 @@ void __ISR(_UART1_TX_VECTOR, IPL5SRS) display(){
 //    }else{
 //        U1TXREG = uart_off[uart_pos % 11 ]; // Write the data byte to the UART.
 //    }
-
+       
     // increment uart_pos to get next uart_message by next loop
     uart_pos++;
     if(uart_pos >= 11*LEDS){ // end uart transmision
         uart_pos = 0;
         IEC1bits.U1TXIE = 0; // disable Interrupt
     }
-    IFS1bits.U1TXIF = 0; // clear interrupt flag
+    
+    // clear interrupt flag
+    asm volatile( // IFS1bits.U1TXIF = 0; 
+    "lw  $t0, IFS1          \n\t" // load IFS1 from memory
+    "ins $t0, $zero, 22, 1  \n\t" // clear interrupt flag bit
+    "sw  $t0, IFS1          \n\t" // write back to memory with flag cleared
+    :::);
+    
 }
 
 void loop() {
