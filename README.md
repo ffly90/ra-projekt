@@ -1,5 +1,15 @@
 # Laborprojekt Rechnerarchitektur 2 - LED-Ansteuerung über UART von Steffen Walter und Johannes Staib
 
+## Hardware
+Das Programm ist für das *PIC32MM USB Curiosity Development Board* mit einem *PIC32MM0256GPM064 TQFP-64* vorgesehen.
+### LED-Ring
+Der LED-Ring ist wie folg anzuschließen, Rot an +5V, Gelb an RC12 und Schwarz an GND.
+### Taster S1
+Zur Richtungsänderung des Lauflichtes wird der nicht rastende Taster S1 verwendet. Dieser ist an den PinRB9 mit einem Pullup-Widerstand angeschlossen. Durch diesen ist der Taster in negativer Logik ausgeführt. Das drücken des Tasters euzeugt eine fallende Signalflanke am Pin. Eine solche kann durch die *Input Change Notification (ICN)* eine Interrupt auslösen in dem die Richtungsänderung umgesetzt ist.
+### Potentiometer POT
+Das Potentiometer zur einstellung der Lauflichtgeschwindigkeit ist an RC8 angeschlossen und wird auf den ADC1, Kanal 1 geführt. Durch verstellen des Potentiometers kann am Pin eine Spannung zwischen 0V und 3.3V angelegt werden. Dabei entspricht 3.3V der Analogreferenzspannung.
+
+
 ## SW
 ### Hauptprogramm
 ![](out/sw/Hauptprogramm.png)
@@ -102,7 +112,7 @@ Um die LED-Bits in die UART-Botschaften umzuwandeln werden die jeweiligen Byts f
 |Oder-Maske|0b000000001|0b000010000| 0b10000000|
 Dach der Umwandlung gibt es für jede LED, mit 4 Farbwerten mit jeweils 8 Bits, elf UART-Botschaften. Diese werden in eine Array mit jeweils 16-bit pro Eintrag gespeichert. Das Übertragen der UART-Botschaften in den Sendebuffer erfolgt dann durch den Indexzugriff auf diesen Array.
 
-
+<!---
 ### Vollständige UART-Konfiguration
 |Bits| Wert|Bedeutung|
 |-|-|-|
@@ -115,4 +125,4 @@ Dach der Umwandlung gibt es für jede LED, mit 4 Farbwerten mit jeweils 8 Bits, 
 |U1STAbits.UTXINV   | 0b1  | UART1 ist invertiert|
 |U1STAbits.UTXEN    | 0b1  | UART1-Transmitter ist aktiviert|
 |U1MODEbits.ON      | 0b1  | UART1 ist aktiviert |
-
+-->

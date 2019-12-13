@@ -1,4 +1,5 @@
 @startuml
+scale 0.5
 concise "LED Bits" as led
 robust "LED Bit Schema" as uart
 concise "UART Bits" as ub
