@@ -7,8 +7,8 @@
 */
 typedef struct 
 {
-    unsigned char g; // order changed by Johannes Staib
-    unsigned char r; // order changed by Johannes Staib
+    unsigned char r;
+    unsigned char g;
     unsigned char b;
     unsigned char w; // added by Johannes Staib
 } RgbColor;

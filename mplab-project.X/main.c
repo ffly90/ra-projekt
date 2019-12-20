@@ -37,8 +37,6 @@ uint16_t        uart_buffer[LEDS*11];
                                                 // address of last  element in uart_map
 uint16_t*       uart_msg_ptr = UART_BUFFER_FIRST_ELEMENT_ADDRESS;// #UART message
 
-// avariable for adc
-uint8_t         adc_freq_divider = 0;           // to only use every 10th sampeling
 
 void setupUART(void){
     // Set U1MODE Register
@@ -62,11 +60,11 @@ void setupUART(void){
 }
 void setupTIMER(void){    
     //TIMER Konfiguration
-    T1CONbits.TGATE     = 0;
-    T1CONbits.TCS       = 0;
-    T1CONbits.TCKPS     = 0b11;
-    T1CONbits.TSYNC     = 0;
-    PR1                 = 938; // overflow interrupt and auto reset at 3225 -> 10ms
+    T1CONbits.TGATE     = 0;    //
+    T1CONbits.TCS       = 0;    // Select SysClock
+    T1CONbits.TCKPS     = 0b11; // set prescaler
+    T1CONbits.TSYNC     = 0;    // 
+    PR1                 = 938;  // set default timer periode
     //Timer Interrupt
     IEC0bits.T1IE       = 1;
     IPC4bits.T1IP       = 4;    
@@ -140,10 +138,7 @@ void rgbw_to_uart(RgbColor in, uint16_t out[]){// in =  u8 g, u8 r, u8 b, u8 w
 void create_rainbow(){
     int i, j;
     // create uart message for LED off
-    rgbw_to_uart(rgbw_dark, uart_off_msg); 
-    for(i=0;i<11;++i){
-        uart_off_msg[i] = 55000+i;
-    }
+    rgbw_to_uart(rgbw_dark, uart_off_msg);
     // create rgbw values
     for(i=0;i<LEDS;i++){
         HsvColor hsv = {.h = 255*i/(LEDS-1), .s = 255, .v = 32};
@@ -171,11 +166,7 @@ void __ISR(_ADC_VECTOR, IPL3AUTO) ADCHandler(void){
     * - occurs if the autosampeling finished a conversion
     * - update the timer auto reset value
     */
-    adc_freq_divider++;
-    if(adc_freq_divider == 10){
-        PR1 = 938+(938*49*ADC1BUF0/4095); // max freq for new led 100Hz , min freq 2Hz
-        adc_freq_divider = 0;
-    }
+    PR1 = 938+(938*49/4095*ADC1BUF0); // max freq for new led 100Hz , min freq 
     IFS1bits.AD1IF = 0;
 }
 // void __ISR(_TIMER_1_VECTOR, IPL4SOFT) 
@@ -209,7 +200,7 @@ void setNextLEDactive(void) {
 void display(){
     /*
     * uart tx interrupt --
-    * - occurs it there is empty space in uart tx fifo buffer
+    * - occurs if there is empty space in uart tx fifo buffer
     * - filling new uart message in to fifo buffer
     */
     
@@ -223,8 +214,8 @@ void display(){
     // increment uart_msg_ptr to get next uart_message by next loop 
     "addiu %0 , %0, 2       \n\t" // increment by 2 because uart_msg only 2-byte long
     
-    // disenable interrupt if updae finished
-    // IEC1bits.U1TXIE = (bool)(uart_msg <= LAST_UART_MSG);
+    // disenable interrupt if update finished
+    // IEC1bits.U1TXIE = (bool)(uart_msg_ptr <= LAST_UART_MAP_ELEMENT_ADDRESS);
     "sle $t0, %0, %1        \n\t" // compare uart_msg_ptr <= LAST_UART_MAP_ELEMENT_ADDRESS
     // sle rd, rs, rt -> rd = rs <= rt
     "lw  $t1, IEC1          \n\t" // load IEC1
