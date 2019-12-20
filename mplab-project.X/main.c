@@ -119,7 +119,7 @@ void rgbw_to_uart(RgbColor in, uint16_t out[]){// in =  u8 g, u8 r, u8 b, u8 w
     // g[7] -> bits[0]
     // w[0] -> bits[31]
     for(i=0;i<4;i++){
-        for(j = 0; j<8; j++){ temp[7-j] = in[i] & 1<<j; }
+        for(j = 0; j<8; j++){ temp[7-j] = rgbw_array[i] & 1<<j; }
         for(j=0;j<8;j++){ bits[i*8+j] = temp[j]; }
     }
 

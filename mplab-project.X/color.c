@@ -49,6 +49,5 @@ RgbColor HsvToRgb(HsvColor hsv)
             rgb.r = hsv.v; rgb.g = p; rgb.b = q;
             break;
     }
-
     return rgb;
 }
