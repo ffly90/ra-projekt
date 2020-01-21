@@ -16,7 +16,7 @@
 #include <xc.h>
 #include "color.h"
 
-#define LEDS 4
+#define LEDS 24
 
 // precalculat arrays
 RgbColor        rgbw_dark={0};              // GRBW values for LED off
@@ -121,7 +121,7 @@ void rgbw_to_uart(RgbColor in, uint16_t out[]){// in =  u8 g, u8 r, u8 b, u8 w
     // g[7] -> bits[0]
     // w[0] -> bits[31]
     for(i=0;i<4;i++){
-        for(j = 0; j<8; j++){ temp[7-j] = in[i] & 1<<j; }
+        for(j = 0; j<8; j++){ temp[7-j] = rgbw_array[i] & 1<<j; }
         for(j=0;j<8;j++){ bits[i*8+j] = temp[j]; }
     }
 
@@ -140,10 +140,8 @@ void rgbw_to_uart(RgbColor in, uint16_t out[]){// in =  u8 g, u8 r, u8 b, u8 w
 void create_rainbow(){
     int i, j;
     // create uart message for LED off
-    rgbw_to_uart(rgbw_dark, uart_off_msg); 
-    for(i=0;i<11;++i){
-        uart_off_msg[i] = 55000+i;
-    }
+    rgbw_to_uart(rgbw_dark, uart_off_msg);
+    
     // create rgbw values
     for(i=0;i<LEDS;i++){
         HsvColor hsv = {.h = 255*i/(LEDS-1), .s = 255, .v = 32};
@@ -178,8 +176,7 @@ void __ISR(_ADC_VECTOR, IPL3AUTO) ADCHandler(void){
     }
     IFS1bits.AD1IF = 0;
 }
-// void __ISR(_TIMER_1_VECTOR, IPL4SOFT) 
-void setNextLEDactive(void) {
+void __ISR(_TIMER_1_VECTOR, IPL4SOFT) setNextLEDactive(void) {
     /*
     * timer interrupt
     * - occurs on timer auto reset
@@ -205,8 +202,7 @@ void setNextLEDactive(void) {
     IFS0bits.T1IF   = 0; // reset interrupt flag
     IEC1bits.U1TXIE = 1; // enable Interrupt
 }
-// void __ISR(_UART1_TX_VECTOR, IPL5SRS)
-void display(){
+void __ISR(_UART1_TX_VECTOR, IPL5SRS) display(){
     /*
     * uart tx interrupt --
     * - occurs it there is empty space in uart tx fifo buffer
