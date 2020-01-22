@@ -168,72 +168,7 @@ void __ISR(_TIMER_1_VECTOR, IPL4SOFT) nextOutput(void) {
 
 void __ISR(_UART1_TX_VECTOR, IPL5SRS) display(){
     asm volatile("nop");
-//    asm volatile(
-//    ".set at\n\t"
-//    "div $0, %[uart_pos], %[eleven]\n\t"
-//    "mflo $t0\n\t"    
-//    "mfhi $t1\n\t"
-//    "sll $t1, $t1, 2\n\t"
-//    "beq $t0, %[pos], 1f\n\t"
-//    
-//    "add $t0, $t1, %[uart_off]\n\t"
-//    "lw $t0, 0($t0)\n\t"
-//    "sw $t0, U1TXREG\n\t"
-//    "b 2f\n\t"
-//    "nop\n\t"
-//    
-//        "1:"
-//    "sll $t2, %[pos], 2\n\t"
-//    "mul $t2, $t2, %[eleven]\n\t"
-//    "add $t2, $t2, %[uart_rainbow]\n\t"
-//    "add $t2, $t2, $t1\n\t"
-//    "lw $t2, 0($t2)\n\t"
-//    "sw $t2, U1TXREG\n\t"
-//    "b 2f\n\t"
-//    "nop\n\t"
-//    "2:"
-//    "nop\n\t"
-//    :
-//    :[uart_rainbow] "r" (uart_rainbow), [pos] "r" (pos), [eleven] "r" (11), [uart_pos] "r" (uart_pos), [uart_off] "r" (uart_off)
-//    :"t0", "t1", "t2"
-//    );
-    
-//    asm volatile
-//    (
-//    ".set at\n\t"
-//      "divu $0, %[uart_pos], %[eleven]\n\t"
-//      "mflo $t0\n\t"
-//      "beq $t0, %[pos], 1f\n\t"
-//      "nop\n\t"
-//      "bne $t0, %[pos], 2f\n\t"
-//      "nop\n\t"
-//      "1:"
-//      "sll $t0, %[pos], 2\n\t"
-//    "mul $t0, $t0, %[eleven]\n\t"
-//    "divu $0, %[uart_pos], %[eleven]\n\t"
-//    "mfhi $t1\n\t"
-//    "sll $t1, $t1, 2\n\t"
-//    "add $t0, $t0, %[uart_rainbow]\n\t"
-//    "add $t0, $t0, $t1\n\t"
-//    "lw $t0, 0($t0)\n\t"
-//    "sw $t0, U1TXREG\n\t"
-//    "b 3f\n\t"
-//    "nop\n\t"
-//    "2:"
-//    "divu $0, %[uart_pos], %[eleven]\n\t"
-//        "mfhi $t1\n\t"
-//        "sll $t1, $t1, 2\n\t"
-//        "add $t1, $t1, %[uart_off]\n\t"
-//        "lw $t1, 0($t1)\n\t"
-//        "sw $t1, U1TXREG\n\t"
-//    "3:"
-//    "nop\n\t"
-//    :
-//    :[pos] "r" (pos), [eleven] "r" (11), [uart_pos] "r" (uart_pos), [uart_rainbow] "r" (uart_rainbow), [uart_off] "r" (uart_off)
-//    :
-//    );
-    
-        if (pos == (uart_pos / 11))
+    if (pos == (uart_pos / 11))
     {
         //U1TXREG = uart_rainbow[pos][uart_pos % 11 ];
         
@@ -270,47 +205,6 @@ void __ISR(_UART1_TX_VECTOR, IPL5SRS) display(){
         //U1TXREG = uart_off[uart_pos % 11];
     }
     
-//    asm volatile(
-//    ".set at            \n\t"
-//    ".set noreorder     \n\t"
-//    "li $t0, 11        \n\t" // load 11 for division
-//    "divu $0, %0, $t0 \n\t" // divide uart_pos by 11
-//    "mflo $t1           \n\t" // get integer from division
-//    "mfhi $t2           \n\t" // get remainder from division
-//    "bne %3, $t1, else \n\t" // if int quotient is not same as pos 
-//    "sll $t2, $t2, 2    \n\t" // calc address offset (needs to bee executed in both cases)
-//
-//    "sll $t1, %3, 2    \n\t" // to get address offset 
-//    "mul $t1, $t1, $t0 \n\t"
-//    "addu $t1, %1, $t1 \n\t" // calc absolut address
-//    "addu $t1, $t1, $t2 \n\t" // calc absolute address
-//    "lw $t0, 0($t1)     \n\t" // load next uart message
-//    "sw $t0, U1TXREG    \n\t" // transfer message to fifo transmit buffer 
-//    "j endif            \n\t" // leave true branch
-//    "nop\n\t"
-//    
-//    "else:                  " // begin false branch
-//    "addu $t2, %2, $t2 \n\t" // calc absolute address
-//    "lw $t0, 0($t2)     \n\t" // load next uart message
-//    "sw $t0, U1TXREG    \n\t" // transfer message to fifo transmit buffer 
-//    "endif:                  " // after if
-//    : "+r" (uart_pos) 
-//    : "r" (uart_rainbow), "r" (uart_off), "r" (pos)
-//    : "t0", "t1", "t2"
-//    );
-    /* 
-    %0 := uart_pos
-    %1 := uart_rainbow
-    %2 := uart_off
-    %3 := pos
-    */
-    
-//    if(pos  == ( uart_pos / 11 )  ){// check if current uart_pos is at the activ LED
-//        U1TXREG = uart_rainbow[pos][uart_pos % 11 ]; // Write the data byte to the UART.
-//    }else{
-//        U1TXREG = uart_off[uart_pos % 11 ]; // Write the data byte to the UART.
-//    }
-
     // increment uart_pos to get next uart_message by next loop
     uart_pos++;
     if(uart_pos >= 11*LEDS){ // end uart transmision
